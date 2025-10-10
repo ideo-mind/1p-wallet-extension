@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1P Wallet Test dApp</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 32px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            color: #666;
+            margin-bottom: 32px;
+        }
+        .section {
+            margin-bottom: 32px;
+        }
+        .section h2 {
+            font-size: 18px;
+            color: #333;
+            margin-bottom: 16px;
+        }
+        button {
+            background: #6366F1;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.2s;
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+        button:hover {
+            background: #4F46E5;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 16px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #6366F1;
+            font-family: monospace;
+            font-size: 12px;
+            word-break: break-all;
+        }
+        .success {
+            border-left-color: #10B981;
+            background: #f0fdf4;
+        }
+        .error {
+            border-left-color: #EF4444;
+            background: #fef2f2;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-bottom: 16px;
+        }
+        .status.connected {
+            background: #D1FAE5;
+            color: #065F46;
+        }
+        .status.disconnected {
+            background: #FEE2E2;
+            color: #991B1B;
+        }
+        input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        label {
+            display: block;
+            margin-bottom: 4px;
+            color: #666;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>1P Wallet Test dApp</h1>
+        <p class="subtitle">Test EIP-1193 Provider Compatibility</p>
+
+        <div id="status-section" class="section">
+            <span id="status" class="status disconnected">Disconnected</span>
+        </div>
+
+        <div class="section">
+            <h2>1. Connect Wallet</h2>
+            <button id="connect-btn">Connect Wallet</button>
+            <div id="connect-result" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="section">
+            <h2>2. Get Accounts</h2>
+            <button id="accounts-btn" disabled>Get Accounts</button>
+            <div id="accounts-result" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="section">
+            <h2>3. Sign Message</h2>
+            <label for="message-input">Message to sign:</label>
+            <input type="text" id="message-input" value="Hello from 1P Wallet!" />
+            <button id="sign-btn" disabled>Sign Message</button>
+            <div id="sign-result" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="section">
+            <h2>4. Send Transaction</h2>
+            <label for="to-address">To Address:</label>
+            <input type="text" id="to-address" value="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb" />
+            <label for="amount">Amount (ETH):</label>
+            <input type="text" id="amount" value="0.001" />
+            <button id="send-btn" disabled>Send Transaction</button>
+            <div id="send-result" class="result" style="display: none;"></div>
+        </div>
+
+        <div class="section">
+            <h2>Provider Info</h2>
+            <div id="provider-info" class="result"></div>
+        </div>
+    </div>
+
+    <script>
+        let accounts = [];
+
+        // Check provider
+        function updateProviderInfo() {
+            const info = document.getElementById('provider-info');
+            if (window.ethereum) {
+                info.textContent = JSON.stringify({
+                    is1PWallet: window.ethereum.is1PWallet,
+                    isMetaMask: window.ethereum.isMetaMask,
+                    chainId: window.ethereum._chainId
+                }, null, 2);
+            } else {
+                info.textContent = 'No Ethereum provider found';
+            }
+        }
+
+        // Connect
+        document.getElementById('connect-btn').addEventListener('click', async () => {
+            const result = document.getElementById('connect-result');
+            try {
+                accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+                result.textContent = `Connected!\nAccounts: ${JSON.stringify(accounts, null, 2)}`;
+                result.className = 'result success';
+                result.style.display = 'block';
+
+                // Update status
+                document.getElementById('status').textContent = 'Connected';
+                document.getElementById('status').className = 'status connected';
+
+                // Enable buttons
+                document.getElementById('accounts-btn').disabled = false;
+                document.getElementById('sign-btn').disabled = false;
+                document.getElementById('send-btn').disabled = false;
+            } catch (error) {
+                result.textContent = `Error: ${error.message}`;
+                result.className = 'result error';
+                result.style.display = 'block';
+            }
+        });
+
+        // Get Accounts
+        document.getElementById('accounts-btn').addEventListener('click', async () => {
+            const result = document.getElementById('accounts-result');
+            try {
+                const accs = await window.ethereum.request({ method: 'eth_accounts' });
+                result.textContent = `Accounts: ${JSON.stringify(accs, null, 2)}`;
+                result.className = 'result success';
+                result.style.display = 'block';
+            } catch (error) {
+                result.textContent = `Error: ${error.message}`;
+                result.className = 'result error';
+                result.style.display = 'block';
+            }
+        });
+
+        // Sign Message
+        document.getElementById('sign-btn').addEventListener('click', async () => {
+            const result = document.getElementById('sign-result');
+            const message = document.getElementById('message-input').value;
+            try {
+                const signature = await window.ethereum.request({
+                    method: 'personal_sign',
+                    params: [message, accounts[0]]
+                });
+                result.textContent = `Signature: ${signature}`;
+                result.className = 'result success';
+                result.style.display = 'block';
+            } catch (error) {
+                result.textContent = `Error: ${error.message}`;
+                result.className = 'result error';
+                result.style.display = 'block';
+            }
+        });
+
+        // Send Transaction
+        document.getElementById('send-btn').addEventListener('click', async () => {
+            const result = document.getElementById('send-result');
+            const to = document.getElementById('to-address').value;
+            const value = document.getElementById('amount').value;
+            try {
+                const txHash = await window.ethereum.request({
+                    method: 'eth_sendTransaction',
+                    params: [{
+                        from: accounts[0],
+                        to: to,
+                        value: '0x' + (parseFloat(value) * 1e18).toString(16)
+                    }]
+                });
+                result.textContent = `Transaction Hash: ${txHash}`;
+                result.className = 'result success';
+                result.style.display = 'block';
+            } catch (error) {
+                result.textContent = `Error: ${error.message}`;
+                result.className = 'result error';
+                result.style.display = 'block';
+            }
+        });
+
+        // Initialize
+        updateProviderInfo();
+    </script>
+</body>
+</html>
+
