@@ -15,23 +15,27 @@
  * 2. Run: node scripts/generate-icons.js
  */
 
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import process from 'process';
+import { fileURLToPath } from 'url';
 
-// Check if sharp is available
-let sharp;
-try {
-  sharp = require('sharp');
-} catch (error) {
-  console.error('❌ Sharp package not found. Please install it first:');
-  console.error('   npm install --save-dev sharp');
-  process.exit(1);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+async function loadSharp() {
+  try {
+    return (await import('sharp')).default;
+  } catch (error) {
+    console.error('❌ Sharp package not found. Please install it first:');
+    console.error('   npm install --save-dev sharp');
+    process.exit(1);
+  }
 }
 
 const iconSizes = [
   { size: 16, name: 'icon16.png' },
   { size: 48, name: 'icon48.png' },
-  { size: 128, name: 'icon128.png' }
+  { size: 128, name: 'icon128.png' },
 ];
 
 const logoPath = path.join(__dirname, '../public/logo.png');
@@ -39,6 +43,8 @@ const iconsDir = path.join(__dirname, '../public/icons');
 
 async function generateIcons() {
   try {
+    const sharp = await loadSharp();
+
     // Check if logo exists
     if (!fs.existsSync(logoPath)) {
       console.error('❌ logo.png not found in public/ directory');
@@ -51,7 +57,6 @@ async function generateIcons() {
       fs.mkdirSync(iconsDir, { recursive: true });
     }
 
-
     // Generate each icon size
     for (const icon of iconSizes) {
       const outputPath = path.join(iconsDir, icon.name);
@@ -59,7 +64,7 @@ async function generateIcons() {
       await sharp(logoPath)
         .resize(icon.size, icon.size, {
           fit: 'contain',
-          background: { r: 0, g: 0, b: 0, alpha: 0 } // Transparent background
+          background: { r: 0, g: 0, b: 0, alpha: 0 }, // Transparent background
         })
         .png()
         .toFile(outputPath);
