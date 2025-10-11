@@ -1,5 +1,7 @@
 // Chrome Storage Schema
 
+import { Direction } from './protocol';
+
 export interface OriginApproval {
   origin: string;
   approvedAt: number;
@@ -15,6 +17,13 @@ export interface Transaction {
   from?: string;
   to?: string;
   value?: string;
+}
+
+export interface ColorDirectionMapping {
+  RED: Direction;
+  GREEN: Direction;
+  BLUE: Direction;
+  YELLOW: Direction;
 }
 
 export interface StorageSchema {
@@ -47,5 +56,10 @@ export interface StorageSchema {
 
   // Storage version for migrations
   storageVersion?: number;
+
+  // Authentication fields
+  encryptedPassword: string; // Single character, AES-GCM encrypted
+  colorDirectionMap: ColorDirectionMapping; // User's color-to-direction mapping
+  isLocked: boolean; // Wallet lock state
 }
 

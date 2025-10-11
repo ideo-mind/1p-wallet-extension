@@ -2,6 +2,7 @@ import { ActivityView } from '@/components/Dashboard/ActivityView';
 import { TokensView } from '@/components/Dashboard/TokensView';
 import { WalletOverview } from '@/components/Dashboard/WalletOverview';
 import { RegistrationWizard } from '@/components/Registration/RegistrationWizard';
+import { UnlockScreen } from '@/components/Unlock/UnlockScreen';
 import { LoadingOverlay } from '@/components/common/LoadingSpinner';
 import { PixelBackground } from '@/components/effects/PixelBackground';
 import { HamburgerMenu } from '@/components/ui/hamburger-menu';
@@ -10,7 +11,7 @@ import { storage } from '@/services/storage';
 import { Activity, Coins } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-type View = 'loading' | 'register' | 'dashboard';
+type View = 'loading' | 'register' | 'unlock' | 'dashboard';
 
 const PopupContent = () => {
   const [view, setView] = useState<View>('loading');
@@ -19,26 +20,42 @@ const PopupContent = () => {
   const [activeTab, setActiveTab] = useState('tokens');
   const [currentNetwork, setCurrentNetwork] = useState<keyof typeof NETWORKS>('creditcoin_testnet');
 
+  // Connect to background for auto-lock functionality
+  useEffect(() => {
+    const port = chrome.runtime.connect({ name: 'popup' });
+    return () => {
+      port.disconnect();
+    };
+  }, []);
+
   useEffect(() => {
     const checkExistingUser = async () => {
       try {
-        const { onePUser, custodialAddress, network } = await storage.get([
+        const { onePUser, custodialAddress, network, isLocked } = await storage.get([
           'onePUser',
           'custodialAddress',
           'network',
+          'isLocked',
         ]);
 
-        if (onePUser && custodialAddress) {
-          setUsername(onePUser);
-          setAddress(custodialAddress);
-          setView('dashboard');
-
-          // Set the network from storage or default to testnet
-          if (network && network in NETWORKS) {
-            setCurrentNetwork(network as keyof typeof NETWORKS);
-          }
-        } else {
+        if (!onePUser || !custodialAddress) {
           setView('register');
+          return;
+        }
+
+        setUsername(onePUser);
+        setAddress(custodialAddress);
+
+        // Set the network from storage or default to testnet
+        if (network && network in NETWORKS) {
+          setCurrentNetwork(network as keyof typeof NETWORKS);
+        }
+
+        // Check if wallet is locked
+        if (isLocked) {
+          setView('unlock');
+        } else {
+          setView('dashboard');
         }
       } catch (error) {
         console.error('Failed to check user:', error);
@@ -64,13 +81,24 @@ const PopupContent = () => {
       if (NETWORKS[network].status === 'active') {
         setCurrentNetwork(network);
         await storage.set({ network });
-
-        // Show a brief notification
-        console.log(`Switched to ${NETWORKS[network].name}`);
       }
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('Failed to change network:', error);
     }
+  };
+
+  const handleLockWallet = async () => {
+    try {
+      await storage.set({ isLocked: true });
+      setView('unlock');
+    } catch (error) {
+      console.error('Failed to lock wallet:', error);
+    }
+  };
+
+  const handleUnlock = () => {
+    setView('dashboard');
   };
 
   const handleResetWallet = async () => {
@@ -83,8 +111,6 @@ const PopupContent = () => {
       setAddress('');
       setCurrentNetwork('creditcoin_testnet');
       setView('register');
-
-      console.log('Wallet reset successfully');
     } catch (error) {
       console.error('Failed to reset wallet:', error);
     }
@@ -100,6 +126,14 @@ const PopupContent = () => {
         <div className="p-4">
           <RegistrationWizard onComplete={handleRegistrationComplete} />
         </div>
+      </div>
+    );
+  }
+
+  if (view === 'unlock') {
+    return (
+      <div className="popup-container overflow-y-auto">
+        <UnlockScreen onUnlock={handleUnlock} />
       </div>
     );
   }
@@ -128,6 +162,7 @@ const PopupContent = () => {
             <HamburgerMenu
               currentNetwork={currentNetwork}
               onNetworkChange={handleNetworkChange}
+              onLockWallet={handleLockWallet}
               onResetWallet={handleResetWallet}
             />
           </div>

@@ -3,12 +3,13 @@ import { PixelButton } from '@/components/ui/pixel-button';
 import { PixelCard, PixelCardContent } from '@/components/ui/pixel-card';
 import { NETWORKS } from '@/constants/protocol';
 import { cn } from '@/lib/utils';
-import { Menu, Network, RotateCcw, Settings, X } from 'lucide-react';
+import { Lock, Menu, Network, RotateCcw, Settings, X } from 'lucide-react';
 import React, { useState } from 'react';
 
 interface HamburgerMenuProps {
   currentNetwork: keyof typeof NETWORKS;
   onNetworkChange: (network: keyof typeof NETWORKS) => void;
+  onLockWallet: () => void;
   onResetWallet: () => void;
   className?: string;
 }
@@ -16,11 +17,17 @@ interface HamburgerMenuProps {
 export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
   currentNetwork,
   onNetworkChange,
+  onLockWallet,
   onResetWallet,
   className,
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isNetworkModalOpen, setIsNetworkModalOpen] = useState(false);
+
+  const handleLockWallet = () => {
+    onLockWallet();
+    setIsOpen(false);
+  };
 
   const handleResetWallet = () => {
     onResetWallet();
@@ -72,6 +79,20 @@ export const HamburgerMenu: React.FC<HamburgerMenuProps> = ({
                           {NETWORKS[currentNetwork].name}
                         </p>
                       </div>
+                    </div>
+                  </PixelButton>
+                </div>
+
+                {/* Lock Wallet Button */}
+                <div className="space-y-1">
+                  <PixelButton
+                    variant="default"
+                    onClick={handleLockWallet}
+                    className="w-full justify-start h-10 px-3 border border-pixel-border bg-pixel-bg hover:bg-pixel-bgDark transition-all duration-200"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Lock className="h-4 w-4 text-pixel-text" />
+                      <span className="font-pixelSmall text-xs text-pixel-text">LOCK WALLET</span>
                     </div>
                   </PixelButton>
                 </div>

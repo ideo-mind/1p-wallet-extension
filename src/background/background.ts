@@ -242,5 +242,23 @@ chrome.runtime.onInstalled.addListener((details) => {
   }
 });
 
+// Auto-lock wallet when popup closes
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === 'popup') {
+    port.onDisconnect.addListener(async () => {
+      // Popup closed - lock the wallet
+      console.log('[1P Wallet] Popup closed, locking wallet');
+      try {
+        const { isLocked } = await storage.get(['isLocked']);
+        if (!isLocked) {
+          await storage.set({ isLocked: true });
+        }
+      } catch (error) {
+        console.error('[1P Wallet] Failed to lock wallet:', error);
+      }
+    });
+  }
+});
+
 console.log('[1P Wallet] Background service worker initialized');
 

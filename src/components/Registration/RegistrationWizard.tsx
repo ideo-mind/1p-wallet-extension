@@ -1,3 +1,5 @@
+import { ColorDirectionMapper } from '@/components/Registration/ColorDirectionMapper';
+import { PasswordInput } from '@/components/Registration/PasswordInput';
 import { LoadingOverlay } from '@/components/common/LoadingSpinner';
 import { CardContent, CardDescription } from '@/components/ui/card';
 import { PixelButton } from '@/components/ui/pixel-button';
@@ -9,13 +11,14 @@ import {
 } from '@/components/ui/pixel-card';
 import { mockBackendService } from '@/services/mock/backend';
 import { storage } from '@/services/storage';
+import { ColorDirectionMapping } from '@/types/storage';
+import { encrypt } from '@/utils/crypto';
 import { createHotWallet } from '@/utils/hotWallet';
-import { Brush, CheckCircle2, Key, User, UserPlus, Zap } from 'lucide-react';
+import { Brush, CheckCircle2, Key, Lock, Palette, User, UserPlus, Zap } from 'lucide-react';
 import { useState } from 'react';
-import { SecretInput } from './SecretInput';
 import { UsernameInput } from './UsernameInput';
 
-type Step = 'welcome' | 'username' | 'secret' | 'confirm' | 'complete';
+type Step = 'welcome' | 'username' | 'password' | 'colorMapping' | 'complete';
 
 interface RegistrationWizardProps {
   onComplete: () => void;
@@ -24,11 +27,11 @@ interface RegistrationWizardProps {
 export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
   const [step, setStep] = useState<Step>('welcome');
   const [username, setUsername] = useState('');
-  const [secret, setSecret] = useState('');
-  const [confirmSecret, setConfirmSecret] = useState('');
+  const [password, setPassword] = useState('');
+  const [colorDirectionMap, setColorDirectionMap] = useState<ColorDirectionMapping | null>(null);
   const [usernameValid, setUsernameValid] = useState(false);
-  const [secretValid, setSecretValid] = useState(false);
-  const [confirmValid, setConfirmValid] = useState(false);
+  const [passwordValid, setPasswordValid] = useState(false);
+  const [colorMappingValid, setColorMappingValid] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [custodialAddress, setCustodialAddress] = useState('');
@@ -38,10 +41,14 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
     setError(null);
 
     try {
-      // Register with backend
+      if (!colorDirectionMap) {
+        throw new Error('Color direction mapping is required');
+      }
+
+      // Register with backend (using password as secret for now)
       const result = await mockBackendService.register({
         username,
-        secret,
+        secret: password, // Use password as the secret for backend
         publicData: { name: username },
       });
 
@@ -53,23 +60,36 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
         throw new Error('No data returned from registration');
       }
 
-      // Save to storage
+      // Encrypt password with username as key
+      const encryptedPassword = await encrypt(password, username);
+
+      // Debug: Log what we're storing
+      console.log('=== REGISTRATION DEBUG ===');
+      console.log('Password:', password);
+      console.log('Username for encryption:', username);
+      console.log('Encrypted password:', encryptedPassword);
+      console.log('Color direction map:', JSON.stringify(colorDirectionMap, null, 2));
+      console.log('==========================');
+
+      // Save to storage (use raw username for consistency with encryption)
       await storage.set({
-        onePUser: result.data.username,
+        onePUser: username, // Use raw username, not result.data.username
         custodialAddress: result.data.custodialAddress,
+        encryptedPassword,
+        colorDirectionMap,
+        isLocked: false, // Unlocked initially
         network: 'creditcoin_testnet',
         approvedOrigins: {},
         txHistory: [],
       });
 
-      // Create hot wallet
-      await createHotWallet(secret);
+      // Create hot wallet (using password)
+      await createHotWallet(password);
 
       setCustodialAddress(result.data.custodialAddress);
 
-      // Clear secret from memory
-      setSecret('');
-      setConfirmSecret('');
+      // Clear sensitive data from memory
+      setPassword('');
 
       setStep('complete');
     } catch (err) {
@@ -204,7 +224,7 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
                 BACK
               </PixelButton>
               <PixelButton
-                onClick={() => setStep('secret')}
+                onClick={() => setStep('password')}
                 disabled={!usernameValid}
                 variant="teal"
                 className="flex-1 h-11"
@@ -218,7 +238,7 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
     );
   }
 
-  if (step === 'secret') {
+  if (step === 'password') {
     return (
       <div className="space-y-6 animate-slide-up">
         {/* Progress */}
@@ -234,19 +254,25 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
         <PixelCard>
           <PixelCardHeader className="space-y-3">
             <div className="flex h-12 w-12 items-center justify-center border-4 border-pixel-border bg-pixel-blue text-white shadow-pixel">
-              <Key className="h-6 w-6" />
+              <Lock className="h-6 w-6" />
             </div>
             <div>
               <PixelCardTitle className="text-xl font-pixel text-pixel-text">
-                YOUR SECRET CHARACTER
+                CHOOSE PASSWORD
               </PixelCardTitle>
               <CardDescription className="text-base mt-1 font-pixelSmall text-pixel-text/80">
-                Choose a single character that you'll remember
+                Type a single character that you&apos;ll remember
               </CardDescription>
             </div>
           </PixelCardHeader>
           <CardContent className="space-y-6">
-            <SecretInput value={secret} onChange={setSecret} onValidation={setSecretValid} />
+            <PasswordInput
+              value={password}
+              onChange={setPassword}
+              onValidation={setPasswordValid}
+            />
+
+            {error && <p className="text-sm font-pixelSmall text-red-600">{error}</p>}
 
             <div className="flex gap-3">
               <PixelButton
@@ -257,8 +283,8 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
                 BACK
               </PixelButton>
               <PixelButton
-                onClick={() => setStep('confirm')}
-                disabled={!secretValid}
+                onClick={() => setStep('colorMapping')}
+                disabled={!passwordValid}
                 variant="blue"
                 className="flex-1 h-11"
               >
@@ -271,9 +297,9 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
     );
   }
 
-  if (step === 'confirm') {
+  if (step === 'colorMapping') {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 animate-slide-up">
         {/* Progress */}
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-pixelSmall text-pixel-text">STEP 3 OF 3</span>
@@ -286,25 +312,23 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
 
         <PixelCard>
           <PixelCardHeader className="space-y-3">
-            <div className="flex h-12 w-12 items-center justify-center border-4 border-pixel-border bg-pixel-green text-white shadow-pixel">
-              <Key className="h-6 w-6" />
+            <div className="flex h-12 w-12 items-center justify-center border-4 border-pixel-border bg-pixel-accent text-white shadow-pixel">
+              <Palette className="h-6 w-6" />
             </div>
             <div>
               <PixelCardTitle className="text-xl font-pixel text-pixel-text">
-                CONFIRM YOUR SECRET
+                ASSIGN COLORS TO DIRECTIONS
               </PixelCardTitle>
               <CardDescription className="text-base mt-1 font-pixelSmall text-pixel-text/80">
-                Enter the same character to confirm
+                Use arrow keys to assign directions to each color
               </CardDescription>
             </div>
           </PixelCardHeader>
           <CardContent className="space-y-6">
-            <SecretInput
-              value={secret}
-              onChange={setConfirmSecret}
-              confirm={true}
-              confirmValue={confirmSecret}
-              onValidation={setConfirmValid}
+            <ColorDirectionMapper
+              value={colorDirectionMap}
+              onChange={setColorDirectionMap}
+              onValidation={setColorMappingValid}
             />
 
             {error && <p className="text-sm font-pixelSmall text-red-600">{error}</p>}
@@ -312,18 +336,15 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
             <div className="flex gap-3">
               <PixelButton
                 variant="default"
-                onClick={() => {
-                  setStep('secret');
-                  setConfirmSecret('');
-                }}
+                onClick={() => setStep('password')}
                 className="flex-1 h-11"
               >
                 BACK
               </PixelButton>
               <PixelButton
                 onClick={handleRegister}
-                disabled={!confirmValid}
-                variant="green"
+                disabled={!colorMappingValid}
+                variant="teal"
                 className="flex-1 h-11"
               >
                 CREATE WALLET
