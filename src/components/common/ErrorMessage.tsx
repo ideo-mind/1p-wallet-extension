@@ -1,6 +1,6 @@
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { AlertCircle } from 'lucide-react';
+import { PixelButton } from '@/components/ui/pixel-button';
+import { PixelCard, PixelCardContent } from '@/components/ui/pixel-card';
+import { PixelWarning } from '@/components/ui/pixel-icons';
 
 interface ErrorMessageProps {
   message: string;
@@ -9,27 +9,26 @@ interface ErrorMessageProps {
 
 export const ErrorMessage = ({ message, onRetry }: ErrorMessageProps) => {
   return (
-    <Card className="border-none shadow-soft bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-950/30 dark:to-orange-950/30 animate-slide-down">
-      <CardContent className="flex flex-col items-center justify-center p-6 space-y-4">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-red-500 to-orange-600 shadow-lg">
-          <AlertCircle className="h-7 w-7 text-white" />
+    <PixelCard className="border-4 border-red-500 bg-red-50 animate-slide-down">
+      <PixelCardContent className="flex flex-col items-center justify-center p-6 space-y-4">
+        <div className="flex h-14 w-14 items-center justify-center border-4 border-pixel-border bg-red-500 shadow-pixel">
+          <PixelWarning className="h-7 w-7 text-white" />
         </div>
         <div className="text-center space-y-2">
-          <p className="font-semibold text-sm text-red-900 dark:text-red-100">{message}</p>
-          <p className="text-xs text-red-700 dark:text-red-300">Please try again</p>
+          <p className="font-pixelSmall text-sm text-pixel-text">{message}</p>
+          <p className="text-xs font-pixelSmall text-pixel-text/70">PLEASE TRY AGAIN</p>
         </div>
         {onRetry && (
-          <Button
+          <PixelButton
             onClick={onRetry}
-            variant="outline"
+            variant="default"
             size="sm"
-            className="border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/50"
+            className="border-red-500 bg-red-500 text-white"
           >
-            Try Again
-          </Button>
+            TRY AGAIN
+          </PixelButton>
         )}
-      </CardContent>
-    </Card>
+      </PixelCardContent>
+    </PixelCard>
   );
 };
-

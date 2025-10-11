@@ -1,9 +1,14 @@
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { PixelButton } from '@/components/ui/pixel-button';
+import {
+  PixelArrowDown,
+  PixelArrowLeft,
+  PixelArrowRight,
+  PixelArrowUp,
+} from '@/components/ui/pixel-icons';
 import { DIRECTION_TO_COLOR } from '@/constants/protocol';
 import { cn } from '@/lib/utils';
 import { Direction } from '@/types/protocol';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, SkipForward } from 'lucide-react';
+import { SkipForward } from 'lucide-react';
 import { useEffect } from 'react';
 
 interface DirectionInputProps {
@@ -51,137 +56,126 @@ export const DirectionInput = ({ onDirection, disabled = false }: DirectionInput
         <div />
 
         {/* Up */}
-        <Button
+        <PixelButton
           onClick={() => onDirection('UP')}
           disabled={disabled}
-          variant="outline"
           size="lg"
           className={cn(
-            'h-24 border-2 font-bold transition-all duration-200 hover:scale-110 active:scale-95 shadow-lg hover:shadow-neon animate-fade-in neon-border',
+            'h-24 font-pixel transition-all duration-200 hover:scale-110 active:scale-95',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
           style={{
             backgroundColor: disabled ? undefined : DIRECTION_TO_COLOR.UP,
             color: disabled ? undefined : '#FFFFFF',
-            borderColor: DIRECTION_TO_COLOR.UP,
-            boxShadow: disabled ? undefined : `0 8px 20px ${DIRECTION_TO_COLOR.UP}40`,
+            borderColor: disabled ? undefined : DIRECTION_TO_COLOR.UP,
           }}
           aria-label="Up (Red)"
         >
           <div className="flex flex-col items-center gap-1">
-            <ArrowUp className="h-8 w-8 stroke-[3]" />
-            <span className="text-sm font-black tracking-wider">UP</span>
+            <PixelArrowUp className="h-8 w-8" />
+            <span className="text-sm font-pixel tracking-wider">UP</span>
           </div>
-        </Button>
+        </PixelButton>
 
         {/* Empty space */}
         <div />
 
         {/* Left */}
-        <Button
+        <PixelButton
           onClick={() => onDirection('LEFT')}
           disabled={disabled}
-          variant="outline"
           size="lg"
           className={cn(
-            'h-24 border-2 font-bold transition-all duration-200 hover:scale-110 active:scale-95 shadow-lg hover:shadow-neon animate-fade-in neon-border',
+            'h-24 font-pixel transition-all duration-200 hover:scale-110 active:scale-95',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
           style={{
             backgroundColor: disabled ? undefined : DIRECTION_TO_COLOR.LEFT,
             color: disabled ? undefined : '#FFFFFF',
-            borderColor: DIRECTION_TO_COLOR.LEFT,
-            boxShadow: disabled ? undefined : `0 8px 20px ${DIRECTION_TO_COLOR.LEFT}40`,
+            borderColor: disabled ? undefined : DIRECTION_TO_COLOR.LEFT,
           }}
           aria-label="Left (Blue)"
         >
           <div className="flex flex-col items-center gap-1">
-            <ArrowLeft className="h-8 w-8 stroke-[3]" />
-            <span className="text-sm font-black tracking-wider">LEFT</span>
+            <PixelArrowLeft className="h-8 w-8" />
+            <span className="text-sm font-pixel tracking-wider">LEFT</span>
           </div>
-        </Button>
+        </PixelButton>
 
         {/* Skip (center) */}
-        <Button
+        <PixelButton
           onClick={() => onDirection('SKIP')}
           disabled={disabled}
-          variant="secondary"
+          variant="default"
           size="lg"
           className={cn(
-            'h-24 border-2 font-bold transition-all duration-200 hover:scale-105 active:scale-95 shadow-lg hover:bg-gray-200 dark:hover:bg-gray-700',
+            'h-24 font-pixel transition-all duration-200 hover:scale-105 active:scale-95',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
           aria-label="Skip"
         >
           <div className="flex flex-col items-center gap-1">
             <SkipForward className="h-8 w-8 stroke-[3]" />
-            <span className="text-sm font-black tracking-wider">SKIP</span>
+            <span className="text-sm font-pixel tracking-wider">SKIP</span>
           </div>
-        </Button>
+        </PixelButton>
 
         {/* Right */}
-        <Button
+        <PixelButton
           onClick={() => onDirection('RIGHT')}
           disabled={disabled}
-          variant="outline"
           size="lg"
           className={cn(
-            'h-24 border-2 font-bold transition-all duration-200 hover:scale-110 active:scale-95 shadow-lg hover:shadow-neon animate-fade-in neon-border',
+            'h-24 font-pixel transition-all duration-200 hover:scale-110 active:scale-95',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
           style={{
             backgroundColor: disabled ? undefined : DIRECTION_TO_COLOR.RIGHT,
             color: disabled ? undefined : '#000000',
-            borderColor: DIRECTION_TO_COLOR.RIGHT,
-            boxShadow: disabled ? undefined : `0 8px 20px ${DIRECTION_TO_COLOR.RIGHT}40`,
+            borderColor: disabled ? undefined : DIRECTION_TO_COLOR.RIGHT,
           }}
           aria-label="Right (Yellow)"
         >
           <div className="flex flex-col items-center gap-1">
-            <ArrowRight className="h-8 w-8 stroke-[3]" />
-            <span className="text-sm font-black tracking-wider">RIGHT</span>
+            <PixelArrowRight className="h-8 w-8" />
+            <span className="text-sm font-pixel tracking-wider">RIGHT</span>
           </div>
-        </Button>
+        </PixelButton>
 
         {/* Empty space */}
         <div />
 
         {/* Down */}
-        <Button
+        <PixelButton
           onClick={() => onDirection('DOWN')}
           disabled={disabled}
-          variant="outline"
           size="lg"
           className={cn(
-            'h-24 border-2 font-bold transition-all duration-200 hover:scale-110 active:scale-95 shadow-lg hover:shadow-neon animate-fade-in neon-border',
+            'h-24 font-pixel transition-all duration-200 hover:scale-110 active:scale-95',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
           style={{
             backgroundColor: disabled ? undefined : DIRECTION_TO_COLOR.DOWN,
             color: disabled ? undefined : '#FFFFFF',
-            borderColor: DIRECTION_TO_COLOR.DOWN,
-            boxShadow: disabled ? undefined : `0 8px 20px ${DIRECTION_TO_COLOR.DOWN}40`,
+            borderColor: disabled ? undefined : DIRECTION_TO_COLOR.DOWN,
           }}
           aria-label="Down (Green)"
         >
           <div className="flex flex-col items-center gap-1">
-            <ArrowDown className="h-8 w-8 stroke-[3]" />
-            <span className="text-sm font-black tracking-wider">DOWN</span>
+            <PixelArrowDown className="h-8 w-8" />
+            <span className="text-sm font-pixel tracking-wider">DOWN</span>
           </div>
-        </Button>
+        </PixelButton>
 
         {/* Empty space */}
         <div />
       </div>
 
-          <Card className="border-none bg-gradient-to-r from-logo-dark/50 to-logo-blue/20">
-        <CardContent className="pt-4 pb-4">
-          <p className="text-center text-xs font-medium text-muted-foreground animate-pulse-subtle">
-            Keyboard: Arrow keys or WASD • Space/Enter to skip
-          </p>
-        </CardContent>
-      </Card>
+      <div className="border-4 border-pixel-border bg-pixel-bgDark p-4">
+        <p className="text-center text-xs font-pixelSmall text-pixel-text/80">
+          KEYBOARD: ARROW KEYS OR WASD • SPACE/ENTER TO SKIP
+        </p>
+      </div>
     </div>
   );
 };
-

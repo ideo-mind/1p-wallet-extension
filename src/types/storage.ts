@@ -27,7 +27,7 @@ export interface StorageSchema {
   hotWalletAddress: string;
 
   // Settings
-  network: 'sepolia' | 'mainnet';
+  network: 'creditcoin_mainnet' | 'creditcoin_testnet' | 'creditcoin_devnet' | 'mainnet';
 
   // Approved dApp origins
   approvedOrigins: Record<string, OriginApproval>;

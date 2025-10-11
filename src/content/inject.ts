@@ -155,7 +155,7 @@ class OnePProvider {
   private async forwardToRPC(method: string, params: unknown): Promise<unknown> {
     // Simple RPC forwarding for read-only calls
     try {
-      const response = await fetch('https://sepolia.infura.io/v3/YOUR_KEY', {
+      const response = await fetch('https://rpc.cc3-testnet.creditcoin.network', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

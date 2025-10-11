@@ -46,15 +46,37 @@ export const DIFFICULTY_CONFIG = {
 
 // Network configuration
 export const NETWORKS = {
-  sepolia: {
-    chainId: '0xaa36a7',
-    name: 'Sepolia Testnet',
-    rpcUrl: 'https://sepolia.infura.io/v3/YOUR_KEY',
+  creditcoin_mainnet: {
+    chainId: '0x18e6e', // 102030 in hex
+    name: 'Creditcoin',
+    rpcUrl: 'https://mainnet3.creditcoin.network',
+    currencySymbol: 'CTC',
+    blockExplorerUrl: 'https://creditcoin.blockscout.com',
+    status: 'coming_soon' as const,
+  },
+  creditcoin_testnet: {
+    chainId: '0x18e7f', // 102031 in hex
+    name: 'Creditcoin Testnet',
+    rpcUrl: 'https://rpc.cc3-testnet.creditcoin.network',
+    currencySymbol: 'tCTC',
+    blockExplorerUrl: 'https://creditcoin-testnet.blockscout.com',
+    status: 'active' as const,
+  },
+  creditcoin_devnet: {
+    chainId: '0x18e80', // 102032 in hex
+    name: 'Creditcoin Devnet',
+    rpcUrl: 'https://rpc.cc3-devnet.creditcoin.network',
+    currencySymbol: 'devCTC',
+    blockExplorerUrl: 'https://creditcoin-devnet.blockscout.com',
+    status: 'coming_soon' as const,
   },
   mainnet: {
     chainId: '0x1',
     name: 'Ethereum Mainnet',
     rpcUrl: 'https://mainnet.infura.io/v3/YOUR_KEY',
+    currencySymbol: 'ETH',
+    blockExplorerUrl: 'https://etherscan.io',
+    status: 'coming_soon' as const,
   },
 } as const;
 

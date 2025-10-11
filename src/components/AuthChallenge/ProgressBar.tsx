@@ -1,5 +1,3 @@
-import { Progress } from '@/components/ui/progress';
-
 interface ProgressBarProps {
   current: number;
   total: number;
@@ -11,22 +9,22 @@ export const ProgressBar = ({ current, total }: ProgressBarProps) => {
   return (
     <div className="space-y-3">
       <div className="relative">
-        <Progress value={percentage} className="h-2" />
-        <div className="absolute inset-0 bg-gradient-to-r from-logo-teal to-logo-blue rounded-full opacity-20 animate-pulse"></div>
-        <div className="absolute inset-0 shadow-neon rounded-full opacity-50"></div>
+        <div className="h-4 bg-pixel-bg border-4 border-pixel-border shadow-pixel-sm">
+          <div
+            className="h-full bg-pixel-teal transition-all duration-300"
+            style={{ width: `${percentage}%` }}
+          />
+        </div>
       </div>
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-2">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-logo-teal to-logo-blue text-white text-xs font-bold shadow-neon animate-neon-pulse">
+          <div className="flex h-7 w-7 items-center justify-center border-2 border-pixel-border bg-pixel-teal text-white text-xs font-pixel shadow-pixel-sm">
             {current}
           </div>
-          <span className="text-sm font-semibold text-foreground">of {total} rounds</span>
+          <span className="text-sm font-pixelSmall text-pixel-text">OF {total} ROUNDS</span>
         </div>
-        <span className="text-sm font-bold text-logo-teal animate-glow-pulse">
-          {percentage.toFixed(0)}%
-        </span>
+        <span className="text-sm font-pixel text-pixel-teal">{percentage.toFixed(0)}%</span>
       </div>
     </div>
   );
 };
-
