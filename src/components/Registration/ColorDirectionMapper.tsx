@@ -86,11 +86,6 @@ export const ColorDirectionMapper: React.FC<ColorDirectionMapperProps> = ({
     onValidation(complete);
 
     if (complete) {
-      console.log('=== COLOR DIRECTION MAPPER DEBUG ===');
-      console.log('Complete mapping:', JSON.stringify(newMapping, null, 2));
-      console.log('Type of newMapping:', typeof newMapping);
-      console.log('Keys:', Object.keys(newMapping));
-      console.log('=====================================');
       onChange(newMapping as ColorDirectionMapping);
     }
   };

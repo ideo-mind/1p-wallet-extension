@@ -233,21 +233,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   return true; // Keep channel open for async response
 });
 
-// Handle extension installation
-chrome.runtime.onInstalled.addListener((details) => {
-  if (details.reason === 'install') {
-    console.log('[1P Wallet] Extension installed');
-  } else if (details.reason === 'update') {
-    console.log('[1P Wallet] Extension updated');
-  }
-});
-
 // Auto-lock wallet when popup closes
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name === 'popup') {
     port.onDisconnect.addListener(async () => {
       // Popup closed - lock the wallet
-      console.log('[1P Wallet] Popup closed, locking wallet');
       try {
         const { isLocked } = await storage.get(['isLocked']);
         if (!isLocked) {
@@ -259,6 +249,3 @@ chrome.runtime.onConnect.addListener((port) => {
     });
   }
 });
-
-console.log('[1P Wallet] Background service worker initialized');
-

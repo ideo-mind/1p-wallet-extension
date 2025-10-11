@@ -51,7 +51,6 @@ async function generateIcons() {
       fs.mkdirSync(iconsDir, { recursive: true });
     }
 
-    console.log('🔄 Generating extension icons from logo.png...\n');
 
     // Generate each icon size
     for (const icon of iconSizes) {
@@ -64,8 +63,6 @@ async function generateIcons() {
         })
         .png()
         .toFile(outputPath);
-
-      console.log(`✅ Generated ${icon.name} (${icon.size}x${icon.size})`);
     }
 
     // Also generate SVG version
@@ -75,18 +72,6 @@ async function generateIcons() {
 </svg>`;
 
     fs.writeFileSync(svgPath, svgContent);
-    console.log('✅ Generated icon.svg');
-
-    console.log('\n🎉 All icons generated successfully!');
-    console.log('\n📁 Generated files:');
-    iconSizes.forEach(icon => {
-      console.log(`   - public/icons/${icon.name}`);
-    });
-    console.log('   - public/icons/icon.svg');
-
-    console.log('\n🚀 Your extension is ready with the new icons!');
-    console.log('   Run "npm run build" to build the extension with updated icons.');
-
   } catch (error) {
     console.error('❌ Error generating icons:', error.message);
     process.exit(1);

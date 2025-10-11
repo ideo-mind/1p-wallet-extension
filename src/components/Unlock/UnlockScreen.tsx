@@ -48,27 +48,12 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
         'colorDirectionMap',
         'onePUser',
       ]);
-
-      console.log('=== STORAGE RETRIEVAL DEBUG ===');
-      console.log('Encrypted password exists:', !!encryptedPassword);
-      console.log('Color direction map exists:', !!colorDirectionMap);
-      console.log('OnePUser exists:', !!onePUser);
-      console.log('Retrieved colorDirectionMap:', JSON.stringify(colorDirectionMap, null, 2));
-      console.log('Type of colorDirectionMap:', typeof colorDirectionMap);
-      console.log('================================');
-
       if (!encryptedPassword || !colorDirectionMap || !onePUser) {
         throw new Error('Wallet data not found. Please reset your wallet.');
       }
 
       // Decrypt password (using username as key)
-      console.log('=== DECRYPTION DEBUG ===');
-      console.log('Encrypted password:', encryptedPassword);
-      console.log('OnePUser for decryption:', onePUser);
-      console.log('=======================');
       const password = await decrypt(encryptedPassword, onePUser);
-      console.log('Decrypted password:', password);
-
       // Ensure password is lowercase for lookup
       const passwordLower = password.toLowerCase();
 
@@ -88,35 +73,14 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
 
       // Get the direction user assigned to that color
       const correctDirection = colorDirectionMap[colorName];
-
-      // Enhanced debug logging
-      console.log('=== UNLOCK VALIDATION DEBUG ===');
-      console.log('1. Password character:', passwordLower);
-      console.log('2. Color assigned to password:', passwordColor);
-      console.log('3. Color name:', colorName);
-      console.log('4. User color-direction mapping:', JSON.stringify(colorDirectionMap, null, 2));
-      console.log('5. Correct direction for', colorName, ':', correctDirection);
-      console.log('6. User selected direction:', direction);
-      console.log('7. Match?', direction === correctDirection);
-      console.log('================================');
-
       if (!correctDirection) {
         throw new Error(`No direction found for color ${colorName} in mapping`);
       }
 
       // Verify with detailed comparison
       const isMatch = direction === correctDirection;
-      console.log('=== DIRECTION COMPARISON ===');
-      console.log('Selected direction:', JSON.stringify(direction));
-      console.log('Correct direction:', JSON.stringify(correctDirection));
-      console.log('Selected type:', typeof direction);
-      console.log('Correct type:', typeof correctDirection);
-      console.log('String comparison:', direction === correctDirection);
-      console.log('Strict equality:', direction === correctDirection);
-      console.log('============================');
 
       if (isMatch) {
-        console.log('✓ Unlock successful!');
         await storage.set({ isLocked: false });
         onUnlock();
       } else {

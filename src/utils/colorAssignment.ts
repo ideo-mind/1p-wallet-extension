@@ -41,12 +41,6 @@ export function generateRandomColorAssignment(): Record<string, string> {
     if (colorName) colorCounts[colorName]++;
   });
 
-  console.log('Color assignment generated:', {
-    totalCharacters: Object.keys(assignment).length,
-    colorDistribution: colorCounts,
-    characters: Object.keys(assignment).sort()
-  });
-
   return assignment;
 }
 

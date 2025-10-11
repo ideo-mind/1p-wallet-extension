@@ -63,14 +63,6 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
       // Encrypt password with username as key
       const encryptedPassword = await encrypt(password, username);
 
-      // Debug: Log what we're storing
-      console.log('=== REGISTRATION DEBUG ===');
-      console.log('Password:', password);
-      console.log('Username for encryption:', username);
-      console.log('Encrypted password:', encryptedPassword);
-      console.log('Color direction map:', JSON.stringify(colorDirectionMap, null, 2));
-      console.log('==========================');
-
       // Save to storage (use raw username for consistency with encryption)
       await storage.set({
         onePUser: username, // Use raw username, not result.data.username
