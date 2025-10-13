@@ -1,5 +1,6 @@
 // Chrome Storage Schema
 
+import type { Address, Hex } from 'viem';
 import { Direction } from './protocol';
 
 export interface OriginApproval {
@@ -32,8 +33,8 @@ export interface StorageSchema {
   custodialAddress: string;
 
   // Creator wallet data (replaces hot wallet)
-  creatorWalletAddress: string; // User's main wallet address
-  encryptedCreatorPrivateKey: string; // AES-GCM encrypted private key
+  creatorWalletAddress: Address; // User's main wallet address
+  encryptedCreatorPrivateKey: string; // AES-GCM encrypted private key (Hex)
   encryptedEncryptionKey: string; // Encryption key (encrypted with user password)
 
   // Settings
@@ -73,5 +74,11 @@ export interface StorageSchema {
   hotWalletPrivkey?: string; // Deprecated: Hot wallet private key
   hotWalletAddress?: string; // Deprecated: Hot wallet address
   password?: string; // Deprecated: Old password field
+}
+
+// Viem-specific types for wallet operations
+export interface ViemWalletInfo {
+  privateKey: Hex;
+  address: Address;
 }
 

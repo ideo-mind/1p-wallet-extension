@@ -15,9 +15,10 @@ import { storage } from '@/services/storage';
 import { ColorDirectionMapping } from '@/types/storage';
 import { checkBalances } from '@/utils/balanceChecker';
 import { createRegistrationSignature } from '@/utils/signatures';
-import { Wallet, formatEther, parseEther } from 'ethers';
+import { createRandomWallet } from '@/utils/wallet';
 import { Brush, CheckCircle2, Key, Lock, Palette, User, UserPlus, Zap } from 'lucide-react';
 import { useState } from 'react';
+import { formatEther, parseEther } from 'viem';
 import { UsernameInput } from './UsernameInput';
 
 type Step = 'welcome' | 'username' | 'password' | 'colorMapping' | 'complete';
@@ -51,11 +52,13 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
       // Step 1: Generate new creator wallet for this user
       setLoadingMessage('Generating wallet...');
       console.log('[Registration] Generating new creator wallet...');
-      const creatorWallet = Wallet.createRandom() as unknown as Wallet;
+      const walletInfo = createRandomWallet();
+      const creatorWallet = walletInfo.account; // Viem Account
+      const creatorPrivateKey = walletInfo.privateKey; // Viem Hex
       console.log('[Registration] ========================================');
       console.log('[Registration] NEW WALLET CREATED');
-      console.log('[Registration] Public Address:', creatorWallet.address);
-      console.log('[Registration] Private Key:', creatorWallet.privateKey);
+      console.log('[Registration] Public Address:', walletInfo.address);
+      console.log('[Registration] Private Key:', creatorPrivateKey);
       console.log('[Registration] ========================================');
 
       // Step 2: Generate encryption key and encrypt private key
@@ -66,10 +69,7 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
       );
 
       const encryptionKey = generateEncryptionKey();
-      const encryptedCreatorPrivateKey = await encryptPrivateKey(
-        creatorWallet.privateKey,
-        encryptionKey
-      );
+      const encryptedCreatorPrivateKey = await encryptPrivateKey(creatorPrivateKey, encryptionKey);
       const encryptedEncryptionKey = await encryptWithPassword(encryptionKey, password);
       const encryptedPassword = await encryptWithPassword(password, password);
 
@@ -79,7 +79,7 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
       setLoadingMessage('Checking balances...');
       console.log('[Registration] Checking balances...');
       const REGISTRATION_FEE = parseEther('100'); // 100 1P tokens
-      const balances = await checkBalances(creatorWallet.address, REGISTRATION_FEE);
+      const balances = await checkBalances(walletInfo.address, REGISTRATION_FEE);
 
       console.log('[Registration] Native balance:', formatEther(balances.nativeBalance), 'CTC');
       console.log('[Registration] Token balance:', formatEther(balances.tokenBalance), '1P');
@@ -138,7 +138,7 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
         const NATIVE_THRESHOLD = parseEther('0.1');
 
         const pollResult = await pollForBalances(
-          creatorWallet.address,
+          walletInfo.address,
           NATIVE_THRESHOLD,
           REGISTRATION_FEE,
           10, // Max 10 attempts
@@ -245,7 +245,7 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
       if (!custodialAddr || custodialAddr === '0x0000000000000000000000000000000000000000') {
         // Account not attached yet, use creator address temporarily
         console.warn('[Registration] Custodial address not set, using creator address');
-        custodialAddr = creatorWallet.address;
+        custodialAddr = walletInfo.address;
       }
 
       // Step 9: Save to storage with encrypted creator wallet
@@ -253,7 +253,7 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
       await storage.set({
         onePUser: username,
         custodialAddress: custodialAddr,
-        creatorWalletAddress: creatorWallet.address,
+        creatorWalletAddress: walletInfo.address,
         encryptedCreatorPrivateKey,
         encryptedEncryptionKey,
         encryptedPassword,

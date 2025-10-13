@@ -9,9 +9,12 @@ import { storage } from '@/services/storage';
 import { AuthenticationChallenge, colorGroupsToGrid, Direction } from '@/types/protocol';
 import { checkBalances } from '@/utils/balanceChecker';
 import { createAuthOptionsSignature, createAuthVerifySignature } from '@/utils/signatures';
-import { formatEther, Wallet } from 'ethers';
+import { createWalletFromPrivateKey } from '@/utils/wallet';
 import { AlertCircle } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import type { Hex } from 'viem';
+import { formatEther, parseEther } from 'viem';
+import type { Account } from 'viem/accounts';
 
 interface UnlockScreenProps {
   onUnlock: () => void;
@@ -27,7 +30,7 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
   const [error, setError] = useState<string | null>(null);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [username, setUsername] = useState('');
-  const [creatorWallet, setCreatorWallet] = useState<Wallet | null>(null); // Store decrypted wallet
+  const [creatorWallet, setCreatorWallet] = useState<Account | null>(null); // Store decrypted wallet
 
   useEffect(() => {
     const init = async () => {
@@ -83,16 +86,17 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
       const encryptionKey = await decryptWithPassword(encryptedEncryptionKey, password);
       const privateKey = await decryptPrivateKey(encryptedCreatorPrivateKey, encryptionKey);
 
-      const { Wallet } = await import('ethers');
-      const creatorWallet = new Wallet(privateKey);
-      console.log('[Unlock] Creator wallet decrypted:', creatorWallet.address);
+      // Create wallet from decrypted private key using viem
+      const walletInfo = createWalletFromPrivateKey(privateKey as Hex);
+      const creatorWallet = walletInfo.account;
+      console.log('[Unlock] Creator wallet decrypted:', walletInfo.address);
 
       // Store wallet in state for later use
       setCreatorWallet(creatorWallet);
 
       // Step 4: Check creator wallet has sufficient balance
       setLoadingMessage('Checking balances...');
-      const balances = await checkBalances(creatorWallet.address, attemptFee);
+      const balances = await checkBalances(walletInfo.address, attemptFee);
 
       console.log('[Unlock] Native balance:', formatEther(balances.nativeBalance), 'CTC');
       console.log('[Unlock] Token balance:', formatEther(balances.tokenBalance), '1P');
@@ -131,14 +135,14 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
         // Validate that airdrop went to correct address
         if (airdropResult.address) {
           console.log('[Unlock] Backend extracted address:', airdropResult.address);
-          console.log('[Unlock] Expected address:', creatorWallet.address);
+          console.log('[Unlock] Expected address:', walletInfo.address);
 
-          if (airdropResult.address.toLowerCase() !== creatorWallet.address.toLowerCase()) {
+          if (airdropResult.address.toLowerCase() !== walletInfo.address.toLowerCase()) {
             console.error('[Unlock] ❌ CRITICAL: Airdrop sent to wrong address!');
-            console.error('[Unlock] Expected:', creatorWallet.address);
+            console.error('[Unlock] Expected:', walletInfo.address);
             console.error('[Unlock] Actual:', airdropResult.address);
             throw new Error(
-              `Airdrop sent to wrong address: ${airdropResult.address} instead of ${creatorWallet.address}`
+              `Airdrop sent to wrong address: ${airdropResult.address} instead of ${walletInfo.address}`
             );
           } else {
             console.log('[Unlock] ✅ Airdrop sent to correct address');
@@ -148,11 +152,10 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
         // Poll for balance updates (retry up to 10 times with 2s delay = 20s max)
         setLoadingMessage('Waiting for airdrop confirmation...');
         const { pollForBalances } = await import('@/utils/balancePoller');
-        const { parseEther } = await import('ethers');
         const NATIVE_THRESHOLD = parseEther('0.1');
 
         const pollResult = await pollForBalances(
-          creatorWallet.address,
+          walletInfo.address,
           NATIVE_THRESHOLD,
           attemptFee,
           10, // Max 10 attempts

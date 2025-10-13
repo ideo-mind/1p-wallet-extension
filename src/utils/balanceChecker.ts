@@ -2,7 +2,7 @@
 // Checks if an account has sufficient native and token balances
 
 import { contractService } from '@/services/contract';
-import { parseEther } from 'ethers';
+import { parseEther, type Address } from 'viem';
 
 export interface BalanceCheck {
   hasNative: boolean;
@@ -21,10 +21,7 @@ const NATIVE_THRESHOLD = parseEther('0.1');
  * @param requiredTokens Required 1P token balance
  * @returns Balance check result
  */
-export async function checkBalances(
-  address: string,
-  requiredTokens: bigint
-): Promise<BalanceCheck> {
+export async function checkBalances(address: Address, requiredTokens: bigint): Promise<BalanceCheck> {
   // Get both balances in parallel
   const [nativeBalance, tokenBalance] = await Promise.all([
     contractService.getNativeBalance(address),

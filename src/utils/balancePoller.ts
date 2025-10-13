@@ -2,7 +2,7 @@
 // Polls for balance updates after airdrop with retries
 
 import { contractService } from '@/services/contract';
-import { formatEther } from 'ethers';
+import { formatEther, type Address } from 'viem';
 
 interface PollResult {
   success: boolean;
@@ -21,7 +21,7 @@ interface PollResult {
  * @returns Poll result
  */
 export async function pollForBalances(
-  address: string,
+  address: Address,
   requiredNative: bigint,
   requiredTokens: bigint,
   maxAttempts: number = 10,
@@ -34,7 +34,9 @@ export async function pollForBalances(
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     // Wait before checking (except first attempt)
     if (attempt > 1) {
-      console.log(`[BalancePoller] Waiting ${delayMs}ms before attempt ${attempt}/${maxAttempts}...`);
+      console.log(
+        `[BalancePoller] Waiting ${delayMs}ms before attempt ${attempt}/${maxAttempts}...`
+      );
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
 
@@ -75,8 +77,20 @@ export async function pollForBalances(
   ]);
 
   console.log('[BalancePoller] ❌ Max attempts reached. Final balances:');
-  console.log('[BalancePoller] Native:', formatEther(finalNative), 'CTC (need', formatEther(requiredNative), ')');
-  console.log('[BalancePoller] Tokens:', formatEther(finalTokens), '1P (need', formatEther(requiredTokens), ')');
+  console.log(
+    '[BalancePoller] Native:',
+    formatEther(finalNative),
+    'CTC (need',
+    formatEther(requiredNative),
+    ')'
+  );
+  console.log(
+    '[BalancePoller] Tokens:',
+    formatEther(finalTokens),
+    '1P (need',
+    formatEther(requiredTokens),
+    ')'
+  );
 
   return {
     success: false,
