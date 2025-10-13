@@ -75,7 +75,7 @@ class ContractService {
     }
 
     try {
-      const exists = await this.contract.usernameExists(username) as unknown as boolean;
+      const exists = (await this.contract.usernameExists(username)) as unknown as boolean;
       return exists;
     } catch (error) {
       console.error('[Contract] Error checking username:', error);
@@ -87,7 +87,12 @@ class ContractService {
    * Register a new username on the contract
    * Requires 100 1P tokens as registration fee
    */
-  async register(username: string, name: string, imageUrl: string, signer: Wallet): Promise<string> {
+  async register(
+    username: string,
+    name: string,
+    imageUrl: string,
+    signer: Wallet
+  ): Promise<string> {
     await this.ensureInitialized();
 
     if (!this.contract || !this.provider) {
@@ -101,9 +106,12 @@ class ContractService {
 
       // Call register function using getFunction
       const registerFn = contractWithSigner.getFunction('register');
-      const tx = await registerFn(username, name, imageUrl, {
+      const tx = (await registerFn(username, name, imageUrl, {
         gasLimit: 500000,
-      }) as unknown as { hash: string; wait: () => Promise<{ status?: number; blockNumber?: number }> };
+      })) as unknown as {
+        hash: string;
+        wait: () => Promise<{ status?: number; blockNumber?: number }>;
+      };
 
       console.log('[Contract] Registration transaction sent:', tx.hash);
 
@@ -134,7 +142,11 @@ class ContractService {
     }
 
     try {
-      const profile = await this.contract.getUserProfile(username) as unknown as [string, string, string];
+      const profile = (await this.contract.getUserProfile(username)) as unknown as [
+        string,
+        string,
+        string,
+      ];
 
       return {
         name: profile[0],
@@ -158,7 +170,15 @@ class ContractService {
     }
 
     try {
-      const state = await this.contract.getUserState(username) as unknown as [bigint, bigint, bigint, bigint, bigint, bigint, boolean];
+      const state = (await this.contract.getUserState(username)) as unknown as [
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        bigint,
+        boolean,
+      ];
 
       return {
         totalAttempts: state[0],
@@ -186,7 +206,7 @@ class ContractService {
     }
 
     try {
-      const fee = await this.contract.getAttemptFee(username) as unknown as bigint;
+      const fee = (await this.contract.getAttemptFee(username)) as unknown as bigint;
       return fee;
     } catch (error) {
       console.error('[Contract] Error getting attempt fee:', error);
@@ -198,7 +218,7 @@ class ContractService {
    * Request an authentication attempt on-chain
    * Returns the attempt ID extracted from transaction events
    */
-  async requestAttempt(username: string, hotWallet: Wallet): Promise<string> {
+  async requestAttempt(username: string): Promise<string> {
     await this.ensureInitialized();
 
     if (!this.contract || !this.provider) {
@@ -206,15 +226,23 @@ class ContractService {
     }
 
     try {
-      // Connect hot wallet to provider
-      const connectedWallet = hotWallet.connect(this.provider);
-      const contractWithSigner = this.contract.connect(connectedWallet);
+      // Create wallet from creator private key
+      const creatorPrivateKey = await configService.getCreatorPrivateKey();
+      if (!creatorPrivateKey) {
+        throw new Error('Creator private key not configured');
+      }
+
+      const creatorWallet = new Wallet(creatorPrivateKey, this.provider);
+      const contractWithSigner = this.contract.connect(creatorWallet);
 
       // Call requestAttempt using getFunction
       const requestAttemptFn = contractWithSigner.getFunction('requestAttempt');
-      const tx = await requestAttemptFn(username, {
+      const tx = (await requestAttemptFn(username, {
         gasLimit: 500000,
-      }) as unknown as { hash: string; wait: () => Promise<{ status?: number; blockNumber?: number; logs?: unknown[] }> };
+      })) as unknown as {
+        hash: string;
+        wait: () => Promise<{ status?: number; blockNumber?: number; logs?: unknown[] }>;
+      };
 
       console.log('[Contract] Request attempt transaction sent:', tx.hash);
 
@@ -292,7 +320,14 @@ class ContractService {
     }
 
     try {
-      const attempt = await this.contract.getAttempt(attemptId) as unknown as [bigint, string, string, bigint, bigint, number];
+      const attempt = (await this.contract.getAttempt(attemptId)) as unknown as [
+        bigint,
+        string,
+        string,
+        bigint,
+        bigint,
+        number,
+      ];
 
       return {
         id: attempt[0],
@@ -319,7 +354,7 @@ class ContractService {
     }
 
     try {
-      const balance = await this.contract.balanceOf(address) as unknown as bigint;
+      const balance = (await this.contract.balanceOf(address)) as unknown as bigint;
       return balance;
     } catch (error) {
       console.error('[Contract] Error getting balance:', error);
@@ -338,7 +373,7 @@ class ContractService {
     }
 
     try {
-      return await this.contract.name() as unknown as string;
+      return (await this.contract.name()) as unknown as string;
     } catch (error) {
       return '1P';
     }
@@ -355,9 +390,28 @@ class ContractService {
     }
 
     try {
-      return await this.contract.symbol() as unknown as string;
+      return (await this.contract.symbol()) as unknown as string;
     } catch (error) {
       return '1P';
+    }
+  }
+
+  /**
+   * Get native balance (CTC) for an address
+   */
+  async getNativeBalance(address: string): Promise<bigint> {
+    await this.ensureInitialized();
+
+    if (!this.provider) {
+      throw new Error('Provider not initialized');
+    }
+
+    try {
+      const balance = await this.provider.getBalance(address);
+      return balance;
+    } catch (error) {
+      console.error('[Contract] Error getting native balance:', error);
+      return BigInt(0);
     }
   }
 

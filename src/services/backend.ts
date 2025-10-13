@@ -62,18 +62,14 @@ class BackendService {
   private getHeaders(): HeadersInit {
     return {
       'Content-Type': 'application/json',
-      'MONEYPOT_CHAIN': this.chainId.toString(),
+      MONEYPOT_CHAIN: this.chainId.toString(),
     };
   }
 
   /**
    * Generic request wrapper with error handling
    */
-  private async request<T>(
-    endpoint: string,
-    method: string = 'POST',
-    body?: unknown
-  ): Promise<T> {
+  private async request<T>(endpoint: string, method: string = 'POST', body?: unknown): Promise<T> {
     try {
       const response = await fetch(`${this.baseUrl}${endpoint}`, {
         method,
@@ -152,12 +148,11 @@ class BackendService {
   }
 
   /**
-   * Request airdrop (optional - for testing)
+   * Request airdrop of CTC and 1P tokens
+   * Used when account has insufficient funds for transactions
    */
-  async requestAirdrop(signature: string, message: string): Promise<AirdropResponse> {
-    const walletPayload = {
-      message,
-    };
+  async airdrop(message: string, signature: string): Promise<AirdropResponse> {
+    const walletPayload = { message };
 
     const requestPayload = {
       encrypted_payload: payloadToHex(walletPayload),

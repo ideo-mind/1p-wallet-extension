@@ -168,16 +168,20 @@ The wallet is now integrated with:
 
 **Registration Flow:**
 1. User enters username, password (single character), and color-direction mapping
-2. Creator account pays 100 1P tokens to register username on-chain
-3. Backend verifier creates custodial account after signature verification
-4. Hot wallet is generated and encrypted with user's password
+2. **Automatic balance check** - if creator has < 100 1P or < 0.1 CTC
+3. **Automatic airdrop** - requests CTC and 1P tokens from backend
+4. Creator account pays 100 1P tokens to register username on-chain
+5. Backend verifier creates custodial account after signature verification
+6. Hot wallet is generated and encrypted with user's password
 
 **Unlock Flow:**
 1. User enters password to decrypt hot wallet
-2. Hot wallet pays attempt fee in 1P tokens to request authentication
-3. Backend generates challenges based on user's legend
-4. User solves challenges by selecting directions
-5. Backend verifies solutions and unlocks wallet
+2. **Automatic balance check** - if hot wallet has < attempt fee or < 0.1 CTC
+3. **Automatic airdrop** - requests CTC and 1P tokens from backend
+4. Hot wallet pays attempt fee in 1P tokens to request authentication
+5. Backend generates challenges based on user's legend
+6. User solves challenges by selecting directions
+7. Backend verifies solutions and unlocks wallet
 
 ### 📋 TODO
 

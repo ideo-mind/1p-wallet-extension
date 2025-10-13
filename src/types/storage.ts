@@ -59,6 +59,7 @@ export interface StorageSchema {
 
   // Authentication fields
   colorDirectionMap: ColorDirectionMapping; // User's color-to-direction mapping
+  password: string; // User's single character password (encrypted)
   isLocked: boolean; // Wallet lock state
 
   // Registration data

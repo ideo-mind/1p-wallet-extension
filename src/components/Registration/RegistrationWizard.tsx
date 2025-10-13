@@ -14,9 +14,10 @@ import { configService } from '@/services/config';
 import { contractService } from '@/services/contract';
 import { storage } from '@/services/storage';
 import { ColorDirectionMapping } from '@/types/storage';
+import { checkBalances } from '@/utils/balanceChecker';
 import { createHotWallet } from '@/utils/hotWallet';
-import { createRegistrationSignature } from '@/utils/signatures';
-import { Wallet } from 'ethers';
+import { createAirdropSignature, createRegistrationSignature } from '@/utils/signatures';
+import { Wallet, formatEther, parseEther } from 'ethers';
 import { Brush, CheckCircle2, Key, Lock, Palette, User, UserPlus, Zap } from 'lucide-react';
 import { useState } from 'react';
 import { UsernameInput } from './UsernameInput';
@@ -36,6 +37,7 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
   const [passwordValid, setPasswordValid] = useState(false);
   const [colorMappingValid, setColorMappingValid] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Creating your wallet...');
   const [error, setError] = useState<string | null>(null);
   const [custodialAddress, setCustodialAddress] = useState('');
 
@@ -57,7 +59,67 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
       const creatorWallet = new Wallet(creatorPrivateKey);
       console.log('[Registration] Using creator wallet:', creatorWallet.address);
 
-      // Step 2: Register on-chain (costs 100 1P tokens)
+      // Step 2: Check balances and request airdrop if needed
+      setLoadingMessage('Checking balances...');
+      console.log('[Registration] Checking balances...');
+      const REGISTRATION_FEE = parseEther('100'); // 100 1P tokens
+      const balances = await checkBalances(creatorWallet.address, REGISTRATION_FEE);
+
+      console.log('[Registration] Native balance:', formatEther(balances.nativeBalance), 'CTC');
+      console.log('[Registration] Token balance:', formatEther(balances.tokenBalance), '1P');
+
+      if (balances.needsAirdrop) {
+        console.log('[Registration] Insufficient funds, requesting airdrop...');
+        setLoadingMessage('Requesting airdrop...');
+
+        const { message, signature } = await createAirdropSignature(creatorWallet);
+        const airdropResult = await backendService.airdrop(message, signature);
+
+        if (!airdropResult.success) {
+          throw new Error(airdropResult.error || 'Airdrop failed. Please contact support.');
+        }
+
+        console.log('[Registration] Airdrop successful!');
+        if (airdropResult.transactions) {
+          console.log('[Registration] Native TX:', airdropResult.transactions.native);
+          console.log('[Registration] Token TX:', airdropResult.transactions.token);
+        }
+
+        // Poll for balance updates (retry up to 10 times with 2s delay = 20s max)
+        setLoadingMessage('Waiting for airdrop confirmation...');
+        const { pollForBalances } = await import('@/utils/balancePoller');
+        const NATIVE_THRESHOLD = parseEther('0.1');
+
+        const pollResult = await pollForBalances(
+          creatorWallet.address,
+          NATIVE_THRESHOLD,
+          REGISTRATION_FEE,
+          10, // Max 10 attempts
+          2000 // 2 second delay between attempts
+        );
+
+        if (!pollResult.success) {
+          console.error('[Registration] Balances after polling:', {
+            native: formatEther(pollResult.nativeBalance),
+            tokens: formatEther(pollResult.tokenBalance),
+            attempts: pollResult.attempts,
+          });
+          throw new Error(
+            `Airdrop completed but balances still insufficient after ${pollResult.attempts} checks. ` +
+              `Current: ${formatEther(pollResult.nativeBalance)} CTC, ${formatEther(pollResult.tokenBalance)} 1P. ` +
+              `Please wait a moment and try again or contact support.`
+          );
+        }
+
+        console.log(
+          '[Registration] Balances sufficient after airdrop (took',
+          pollResult.attempts,
+          'attempts)'
+        );
+      }
+
+      // Step 3: Register on-chain (costs 100 1P tokens)
+      setLoadingMessage('Registering on contract...');
       console.log('[Registration] Registering on contract...');
       const txHash = await contractService.register(
         username,
@@ -68,7 +130,8 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
 
       console.log('[Registration] Contract registration successful:', txHash);
 
-      // Step 3: Create legend for backend (convert color mapping to backend format)
+      // Step 4: Create legend for backend (convert color mapping to backend format)
+      setLoadingMessage('Verifying with backend...');
       const legend = {
         red:
           colorDirectionMap.RED === 'UP'
@@ -106,7 +169,7 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
 
       // Step 4: Create registration signature for backend
       console.log('[Registration] Creating backend signature...');
-      const { payload, signature } = await createRegistrationSignature(creatorWallet, {
+      const { payload, signature } = await createRegistrationSignature({
         onePUser: username,
         password,
         legend,
@@ -170,7 +233,7 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
   };
 
   if (loading) {
-    return <LoadingOverlay message="Creating your wallet..." />;
+    return <LoadingOverlay message={loadingMessage} />;
   }
 
   if (step === 'welcome') {
