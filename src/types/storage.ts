@@ -58,8 +58,13 @@ export interface StorageSchema {
   storageVersion?: number;
 
   // Authentication fields
-  encryptedPassword: string; // Single character, AES-GCM encrypted
   colorDirectionMap: ColorDirectionMapping; // User's color-to-direction mapping
   isLocked: boolean; // Wallet lock state
+
+  // Registration data
+  registrationTxHash?: string; // Transaction hash for on-chain registration
+
+  // Current attempt tracking
+  lastAttemptId?: string; // Last authentication attempt ID
 }
 

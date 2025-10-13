@@ -18,12 +18,22 @@ Quantum-resistant browser wallet secured by the 1P (1-Letter Password) Protocol.
 - Node.js 18+
 - npm or yarn
 - Chrome browser
+- Creditcoin Testnet account with 1P tokens (for registration)
+- Backend verifier service running (or access to deployed instance)
 
 ### Installation
 
 ```bash
 # Install dependencies
 npm install
+
+# Configure environment variables
+cp .env.example .env
+# Edit .env with your configuration:
+# - MONEY_AUTH_URL: Backend verifier URL
+# - CHAIN_ID: Creditcoin chain ID (102031 for testnet)
+# - ONE_P_CONTRACT_ADDRESS: OneP contract address
+# - EVM_CREATOR_PRIVATE_KEY: Private key for registration fees
 
 # Build extension
 npm run build
@@ -143,23 +153,40 @@ Then open http://localhost:3000 and test wallet connection, signing, and transac
 - EIP-1193 provider injection
 - Background service worker with message router
 
-### 🚧 Mock Mode
+### ✅ Smart Contract & Backend Integration
 
-Currently using **mock services** for development. Backend integration will be added later.
+The wallet is now integrated with:
 
-- Mock registration (auto-succeeds)
-- Mock authentication (80% success rate)
-- Mock balances and transactions
-- Mock contract interactions
+- **OneP Contract** on Creditcoin Testnet
+  - On-chain username registration (costs 100 1P tokens)
+  - Authentication attempt requests with fee payment
+  - User profile and state management
+- **Backend Verifier Service**
+  - Registration verification with signatures
+  - Challenge generation for authentication
+  - Solution verification
+
+**Registration Flow:**
+1. User enters username, password (single character), and color-direction mapping
+2. Creator account pays 100 1P tokens to register username on-chain
+3. Backend verifier creates custodial account after signature verification
+4. Hot wallet is generated and encrypted with user's password
+
+**Unlock Flow:**
+1. User enters password to decrypt hot wallet
+2. Hot wallet pays attempt fee in 1P tokens to request authentication
+3. Backend generates challenges based on user's legend
+4. User solves challenges by selecting directions
+5. Backend verifies solutions and unlocks wallet
 
 ### 📋 TODO
 
-- Integrate real backend API (Cloudflare Worker)
-- Integrate real smart contract (1P Contract on Sepolia)
-- Add transaction confirmation popups
-- Add origin approval management
+- Add transaction confirmation popups for dApp requests
+- Implement PERSONAL_SIGN authentication flow in background worker
+- Implement SEND_TRANSACTION authentication flow in background worker
+- Add origin approval management UI
 - Implement profile editing
-- Add $1P token purchasing flow
+- Add $1P token purchasing/transfer flow
 - Implement session management
 - Add error tracking
 - Write comprehensive tests

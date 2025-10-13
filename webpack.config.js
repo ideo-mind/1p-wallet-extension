@@ -1,5 +1,7 @@
 const path = require('path');
 const CopyPlugin = require('copy-webpack-plugin');
+const webpack = require('webpack');
+require('dotenv').config();
 
 module.exports = (env, argv) => {
   const isDevelopment = argv.mode === 'development';
@@ -30,11 +32,7 @@ module.exports = (env, argv) => {
         },
         {
           test: /\.css$/,
-          use: [
-            'style-loader',
-            'css-loader',
-            'postcss-loader',
-          ],
+          use: ['style-loader', 'css-loader', 'postcss-loader'],
         },
       ],
     },
@@ -59,6 +57,18 @@ module.exports = (env, argv) => {
           { from: 'public', to: '.' },
           { from: 'src/popup/popup.html', to: 'popup.html' },
         ],
+      }),
+      new webpack.DefinePlugin({
+        'process.env.MONEY_AUTH_URL': JSON.stringify(
+          process.env.MONEY_AUTH_URL || 'http://localhost:8787'
+        ),
+        'process.env.CHAIN_ID': JSON.stringify(process.env.CHAIN_ID || '102031'),
+        'process.env.ONE_P_CONTRACT_ADDRESS': JSON.stringify(
+          process.env.ONE_P_CONTRACT_ADDRESS || ''
+        ),
+        'process.env.EVM_CREATOR_PRIVATE_KEY': JSON.stringify(
+          process.env.EVM_CREATOR_PRIVATE_KEY || ''
+        ),
       }),
     ],
 

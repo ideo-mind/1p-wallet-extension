@@ -9,11 +9,14 @@ import {
   PixelCardHeader,
   PixelCardTitle,
 } from '@/components/ui/pixel-card';
-import { mockBackendService } from '@/services/mock/backend';
+import { backendService } from '@/services/backend';
+import { configService } from '@/services/config';
+import { contractService } from '@/services/contract';
 import { storage } from '@/services/storage';
 import { ColorDirectionMapping } from '@/types/storage';
-import { encrypt } from '@/utils/crypto';
 import { createHotWallet } from '@/utils/hotWallet';
+import { createRegistrationSignature } from '@/utils/signatures';
+import { Wallet } from 'ethers';
 import { Brush, CheckCircle2, Key, Lock, Palette, User, UserPlus, Zap } from 'lucide-react';
 import { useState } from 'react';
 import { UsernameInput } from './UsernameInput';
@@ -45,46 +48,121 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
         throw new Error('Color direction mapping is required');
       }
 
-      // Register with backend (using password as secret for now)
-      const result = await mockBackendService.register({
+      // Step 1: Load creator account from environment
+      const creatorPrivateKey = configService.getCreatorPrivateKey();
+      if (!creatorPrivateKey) {
+        throw new Error('Creator private key not configured. Check environment variables.');
+      }
+
+      const creatorWallet = new Wallet(creatorPrivateKey);
+      console.log('[Registration] Using creator wallet:', creatorWallet.address);
+
+      // Step 2: Register on-chain (costs 100 1P tokens)
+      console.log('[Registration] Registering on contract...');
+      const txHash = await contractService.register(
         username,
-        secret: password, // Use password as the secret for backend
-        publicData: { name: username },
+        username, // Display name = username for now
+        `https://example.com/avatar/${username}.png`, // Default avatar
+        creatorWallet
+      );
+
+      console.log('[Registration] Contract registration successful:', txHash);
+
+      // Step 3: Create legend for backend (convert color mapping to backend format)
+      const legend = {
+        red:
+          colorDirectionMap.RED === 'UP'
+            ? 'U'
+            : colorDirectionMap.RED === 'DOWN'
+              ? 'D'
+              : colorDirectionMap.RED === 'LEFT'
+                ? 'L'
+                : 'R',
+        green:
+          colorDirectionMap.GREEN === 'UP'
+            ? 'U'
+            : colorDirectionMap.GREEN === 'DOWN'
+              ? 'D'
+              : colorDirectionMap.GREEN === 'LEFT'
+                ? 'L'
+                : 'R',
+        blue:
+          colorDirectionMap.BLUE === 'UP'
+            ? 'U'
+            : colorDirectionMap.BLUE === 'DOWN'
+              ? 'D'
+              : colorDirectionMap.BLUE === 'LEFT'
+                ? 'L'
+                : 'R',
+        yellow:
+          colorDirectionMap.YELLOW === 'UP'
+            ? 'U'
+            : colorDirectionMap.YELLOW === 'DOWN'
+              ? 'D'
+              : colorDirectionMap.YELLOW === 'LEFT'
+                ? 'L'
+                : 'R',
+      };
+
+      // Step 4: Create registration signature for backend
+      console.log('[Registration] Creating backend signature...');
+      const { payload, signature } = await createRegistrationSignature(creatorWallet, {
+        onePUser: username,
+        password,
+        legend,
       });
 
-      if (!result.success) {
-        throw new Error(result.error || 'Registration failed');
+      // Step 5: Verify registration with backend
+      console.log('[Registration] Verifying with backend...');
+      const verifyResult = await backendService.verifyRegistration(payload, signature);
+
+      if (!verifyResult.success) {
+        // Check if already registered error
+        if (verifyResult.error?.toLowerCase().includes('already registered')) {
+          console.log('[Registration] User already registered on backend, continuing...');
+        } else {
+          throw new Error(verifyResult.error || 'Backend verification failed');
+        }
       }
 
-      if (!result.data) {
-        throw new Error('No data returned from registration');
+      console.log('[Registration] Backend verification successful');
+
+      // Step 6: Get custodial address from contract
+      console.log('[Registration] Fetching user profile...');
+      const profile = await contractService.getUserProfile(username);
+
+      let custodialAddr = profile.account;
+      if (!custodialAddr || custodialAddr === '0x0000000000000000000000000000000000000000') {
+        // Account not attached yet, use creator address temporarily
+        console.warn('[Registration] Custodial address not set, using creator address');
+        custodialAddr = creatorWallet.address;
       }
 
-      // Encrypt password with username as key
-      const encryptedPassword = await encrypt(password, username);
+      // Step 7: Create hot wallet (using password)
+      console.log('[Registration] Creating hot wallet...');
+      await createHotWallet(password);
 
-      // Save to storage (use raw username for consistency with encryption)
+      // Step 8: Save to storage (NOTE: password is NOT saved, only used during registration)
       await storage.set({
-        onePUser: username, // Use raw username, not result.data.username
-        custodialAddress: result.data.custodialAddress,
-        encryptedPassword,
+        onePUser: username,
+        custodialAddress: custodialAddr,
         colorDirectionMap,
         isLocked: false, // Unlocked initially
         network: 'creditcoin_testnet',
         approvedOrigins: {},
         txHistory: [],
+        registrationTxHash: txHash,
       });
 
-      // Create hot wallet (using password)
-      await createHotWallet(password);
-
-      setCustodialAddress(result.data.custodialAddress);
+      setCustodialAddress(custodialAddr);
 
       // Clear sensitive data from memory
       setPassword('');
 
+      console.log('[Registration] Registration complete!');
       setStep('complete');
     } catch (err) {
+      console.error('[Registration] Error:', err);
       setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
       setLoading(false);

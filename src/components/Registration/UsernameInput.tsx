@@ -1,7 +1,7 @@
 import { Input } from '@/components/ui/input';
 import { PixelCheck, PixelX } from '@/components/ui/pixel-icons';
 import { cn } from '@/lib/utils';
-import { mockBackendService } from '@/services/mock/backend';
+import { contractService } from '@/services/contract';
 import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
@@ -46,14 +46,12 @@ export const UsernameInput = ({ value, onChange, onValidation }: UsernameInputPr
         return;
       }
 
-      // Check availability
+      // Check availability on blockchain
       setChecking(true);
       try {
-        const result = await mockBackendService.checkUsername(value);
-        if (result.success && result.data) {
-          setAvailable(result.data.available);
-          onValidation(result.data.available);
-        }
+        const exists = await contractService.usernameExists(value);
+        setAvailable(!exists); // Available if it doesn't exist
+        onValidation(!exists);
       } catch (err) {
         setError('Failed to check username availability');
         onValidation(false);

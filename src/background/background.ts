@@ -1,11 +1,13 @@
 // Background Service Worker
 
-import { mockBackendService } from '@/services/mock/backend';
 import { storage } from '@/services/storage';
 import { MessageResponse } from '@/types/messages';
 
 // Message handler type
-type MessageHandler = (payload: unknown, sender: chrome.runtime.MessageSender) => Promise<MessageResponse>;
+type MessageHandler = (
+  payload: unknown,
+  sender: chrome.runtime.MessageSender
+) => Promise<MessageResponse>;
 
 class MessageRouter {
   private handlers = new Map<string, MessageHandler>();
@@ -43,10 +45,7 @@ const router = new MessageRouter();
 
 // Handle GET_STATE
 router.register('GET_STATE', async () => {
-  const { custodialAddress, network } = await storage.get([
-    'custodialAddress',
-    'network',
-  ]);
+  const { custodialAddress, network } = await storage.get(['custodialAddress', 'network']);
 
   const accounts = custodialAddress ? [custodialAddress] : [];
   const chainId = network === 'mainnet' ? '0x1' : '0xaa36a7';
@@ -104,9 +103,7 @@ router.register('REQUEST_ACCOUNTS', async (payload) => {
 });
 
 // Handle PERSONAL_SIGN
-router.register('PERSONAL_SIGN', async (payload) => {
-  const { message, origin } = payload as { message: string; address: string; origin: string };
-
+router.register('PERSONAL_SIGN', async () => {
   const { onePUser } = await storage.get(['onePUser']);
 
   if (!onePUser) {
@@ -116,63 +113,16 @@ router.register('PERSONAL_SIGN', async (payload) => {
     };
   }
 
-  // In full implementation:
-  // 1. Show confirmation popup
-  // 2. Request authentication challenge
-  // 3. User solves grids
-  // 4. Submit to backend
-  // 5. Return signature
-
-  // For now, mock the authentication
-  try {
-    const challenge = await mockBackendService.getAuthOptions({
-      username: onePUser,
-      action: 'sign',
-      payload: { message, origin },
-    });
-
-    if (!challenge.success || !challenge.data) {
-      throw new Error('Failed to get challenge');
-    }
-
-    // Simulate successful authentication
-    const mockDirections = Array(challenge.data.rounds).fill('UP');
-    const verifyResult = await mockBackendService.verifyAuth({
-      username: onePUser,
-      attemptId: challenge.data.attemptId,
-      directions: mockDirections as ('UP')[],
-      timestamp: Date.now(),
-      duration: 1000,
-    });
-
-    if (!verifyResult.success || !verifyResult.data) {
-      throw new Error('Authentication failed');
-    }
-
-    return {
-      success: true,
-      data: {
-        signature: verifyResult.data.signature,
-      },
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Signing failed',
-    };
-  }
+  // TODO: In full implementation, show confirmation popup and perform real authentication
+  // For now, return error indicating this needs user interaction
+  return {
+    success: false,
+    error: 'Personal sign requires authentication - not yet implemented in background',
+  };
 });
 
 // Handle SEND_TRANSACTION
-router.register('SEND_TRANSACTION', async (payload) => {
-  const { to, value, data, origin } = payload as {
-    to: string;
-    value?: string;
-    data?: string;
-    from: string;
-    origin: string;
-  };
-
+router.register('SEND_TRANSACTION', async () => {
   const { onePUser } = await storage.get(['onePUser']);
 
   if (!onePUser) {
@@ -182,49 +132,12 @@ router.register('SEND_TRANSACTION', async (payload) => {
     };
   }
 
-  // Similar to PERSONAL_SIGN, but for transactions
-  try {
-    const challenge = await mockBackendService.getAuthOptions({
-      username: onePUser,
-      action: 'sendTransaction',
-      payload: { to, value, data, origin },
-    });
-
-    if (!challenge.success || !challenge.data) {
-      throw new Error('Failed to get challenge');
-    }
-
-    // Simulate successful authentication
-    const mockDirections = Array(challenge.data.rounds).fill('UP');
-    const verifyResult = await mockBackendService.verifyAuth({
-      username: onePUser,
-      attemptId: challenge.data.attemptId,
-      directions: mockDirections as ('UP')[],
-      timestamp: Date.now(),
-      duration: 1000,
-    });
-
-    if (!verifyResult.success) {
-      throw new Error('Authentication failed');
-    }
-
-    // Mock transaction hash
-    const txHash = `0x${Math.random().toString(16).slice(2)}${Math.random()
-      .toString(16)
-      .slice(2)}`;
-
-    return {
-      success: true,
-      data: {
-        txHash,
-      },
-    };
-  } catch (error) {
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Transaction failed',
-    };
-  }
+  // TODO: In full implementation, show confirmation popup and perform real authentication
+  // For now, return error indicating this needs user interaction
+  return {
+    success: false,
+    error: 'Send transaction requires authentication - not yet implemented in background',
+  };
 });
 
 // Setup message listener
