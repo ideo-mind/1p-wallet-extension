@@ -10,13 +10,11 @@ import {
   PixelCardTitle,
 } from '@/components/ui/pixel-card';
 import { backendService } from '@/services/backend';
-import { configService } from '@/services/config';
 import { contractService } from '@/services/contract';
 import { storage } from '@/services/storage';
 import { ColorDirectionMapping } from '@/types/storage';
 import { checkBalances } from '@/utils/balanceChecker';
-import { createHotWallet } from '@/utils/hotWallet';
-import { createAirdropSignature, createRegistrationSignature } from '@/utils/signatures';
+import { createRegistrationSignature } from '@/utils/signatures';
 import { Wallet, formatEther, parseEther } from 'ethers';
 import { Brush, CheckCircle2, Key, Lock, Palette, User, UserPlus, Zap } from 'lucide-react';
 import { useState } from 'react';
@@ -50,16 +48,34 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
         throw new Error('Color direction mapping is required');
       }
 
-      // Step 1: Load creator account from environment
-      const creatorPrivateKey = configService.getCreatorPrivateKey();
-      if (!creatorPrivateKey) {
-        throw new Error('Creator private key not configured. Check environment variables.');
-      }
+      // Step 1: Generate new creator wallet for this user
+      setLoadingMessage('Generating wallet...');
+      console.log('[Registration] Generating new creator wallet...');
+      const creatorWallet = Wallet.createRandom() as unknown as Wallet;
+      console.log('[Registration] ========================================');
+      console.log('[Registration] NEW WALLET CREATED');
+      console.log('[Registration] Public Address:', creatorWallet.address);
+      console.log('[Registration] Private Key:', creatorWallet.privateKey);
+      console.log('[Registration] ========================================');
 
-      const creatorWallet = new Wallet(creatorPrivateKey);
-      console.log('[Registration] Using creator wallet:', creatorWallet.address);
+      // Step 2: Generate encryption key and encrypt private key
+      setLoadingMessage('Securing wallet...');
+      console.log('[Registration] Generating encryption key...');
+      const { generateEncryptionKey, encryptPrivateKey, encryptWithPassword } = await import(
+        '@/utils/crypto'
+      );
 
-      // Step 2: Check balances and request airdrop if needed
+      const encryptionKey = generateEncryptionKey();
+      const encryptedCreatorPrivateKey = await encryptPrivateKey(
+        creatorWallet.privateKey,
+        encryptionKey
+      );
+      const encryptedEncryptionKey = await encryptWithPassword(encryptionKey, password);
+      const encryptedPassword = await encryptWithPassword(password, password);
+
+      console.log('[Registration] Wallet secured with encryption');
+
+      // Step 3: Check balances and request airdrop if needed
       setLoadingMessage('Checking balances...');
       console.log('[Registration] Checking balances...');
       const REGISTRATION_FEE = parseEther('100'); // 100 1P tokens
@@ -72,7 +88,21 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
         console.log('[Registration] Insufficient funds, requesting airdrop...');
         setLoadingMessage('Requesting airdrop...');
 
-        const { message, signature } = await createAirdropSignature(creatorWallet);
+        // Debug signature creation to identify address extraction issue
+        const { createAirdropSignatureWithDebug } = await import('@/utils/signatureDebug');
+        const { message, signature, debug } = await createAirdropSignatureWithDebug(creatorWallet);
+
+        console.log('[Registration] Signature debug info:', debug);
+
+        if (!debug.addressesMatch) {
+          console.error('[Registration] ❌ CRITICAL: Signature address mismatch detected!');
+          console.error('[Registration] Expected address:', debug.signerAddress);
+          console.error('[Registration] Recovered address:', debug.recoveredAddress);
+          throw new Error(
+            `Signature verification failed: Expected ${debug.signerAddress} but recovered ${debug.recoveredAddress}`
+          );
+        }
+
         const airdropResult = await backendService.airdrop(message, signature);
 
         if (!airdropResult.success) {
@@ -83,6 +113,23 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
         if (airdropResult.transactions) {
           console.log('[Registration] Native TX:', airdropResult.transactions.native);
           console.log('[Registration] Token TX:', airdropResult.transactions.token);
+        }
+
+        // Validate that airdrop went to correct address
+        if (airdropResult.address) {
+          console.log('[Registration] Backend extracted address:', airdropResult.address);
+          console.log('[Registration] Expected address:', creatorWallet.address);
+
+          if (airdropResult.address.toLowerCase() !== creatorWallet.address.toLowerCase()) {
+            console.error('[Registration] ❌ CRITICAL: Airdrop sent to wrong address!');
+            console.error('[Registration] Expected:', creatorWallet.address);
+            console.error('[Registration] Actual:', airdropResult.address);
+            throw new Error(
+              `Airdrop sent to wrong address: ${airdropResult.address} instead of ${creatorWallet.address}`
+            );
+          } else {
+            console.log('[Registration] ✅ Airdrop sent to correct address');
+          }
         }
 
         // Poll for balance updates (retry up to 10 times with 2s delay = 20s max)
@@ -118,7 +165,7 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
         );
       }
 
-      // Step 3: Register on-chain (costs 100 1P tokens)
+      // Step 4: Register on-chain (costs 100 1P tokens)
       setLoadingMessage('Registering on contract...');
       console.log('[Registration] Registering on contract...');
       const txHash = await contractService.register(
@@ -130,7 +177,7 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
 
       console.log('[Registration] Contract registration successful:', txHash);
 
-      // Step 4: Create legend for backend (convert color mapping to backend format)
+      // Step 5: Create legend for backend (convert color mapping to backend format)
       setLoadingMessage('Verifying with backend...');
       const legend = {
         red:
@@ -167,15 +214,15 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
                 : 'R',
       };
 
-      // Step 4: Create registration signature for backend
+      // Step 6: Create registration signature for backend
       console.log('[Registration] Creating backend signature...');
-      const { payload, signature } = await createRegistrationSignature({
+      const { payload, signature } = await createRegistrationSignature(creatorWallet, {
         onePUser: username,
         password,
         legend,
       });
 
-      // Step 5: Verify registration with backend
+      // Step 7: Verify registration with backend
       console.log('[Registration] Verifying with backend...');
       const verifyResult = await backendService.verifyRegistration(payload, signature);
 
@@ -190,7 +237,7 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
 
       console.log('[Registration] Backend verification successful');
 
-      // Step 6: Get custodial address from contract
+      // Step 8: Get custodial address from contract
       console.log('[Registration] Fetching user profile...');
       const profile = await contractService.getUserProfile(username);
 
@@ -201,20 +248,22 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
         custodialAddr = creatorWallet.address;
       }
 
-      // Step 7: Create hot wallet (using password)
-      console.log('[Registration] Creating hot wallet...');
-      await createHotWallet(password);
-
-      // Step 8: Save to storage (NOTE: password is NOT saved, only used during registration)
+      // Step 9: Save to storage with encrypted creator wallet
+      setLoadingMessage('Saving wallet...');
       await storage.set({
         onePUser: username,
         custodialAddress: custodialAddr,
+        creatorWalletAddress: creatorWallet.address,
+        encryptedCreatorPrivateKey,
+        encryptedEncryptionKey,
+        encryptedPassword,
         colorDirectionMap,
         isLocked: false, // Unlocked initially
         network: 'creditcoin_testnet',
         approvedOrigins: {},
         txHistory: [],
         registrationTxHash: txHash,
+        storageVersion: 2, // Mark as new storage version
       });
 
       setCustodialAddress(custodialAddr);

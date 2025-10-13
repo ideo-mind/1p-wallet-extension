@@ -6,14 +6,10 @@ import { PixelCard, PixelCardContent } from '@/components/ui/pixel-card';
 import { backendService } from '@/services/backend';
 import { contractService } from '@/services/contract';
 import { storage } from '@/services/storage';
-import { AuthenticationChallenge, Direction, colorGroupsToGrid } from '@/types/protocol';
+import { AuthenticationChallenge, colorGroupsToGrid, Direction } from '@/types/protocol';
 import { checkBalances } from '@/utils/balanceChecker';
-import {
-  createAirdropSignature,
-  createAuthOptionsSignature,
-  createAuthVerifySignature,
-} from '@/utils/signatures';
-import { formatEther } from 'ethers';
+import { createAuthOptionsSignature, createAuthVerifySignature } from '@/utils/signatures';
+import { formatEther, Wallet } from 'ethers';
 import { AlertCircle } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 
@@ -31,6 +27,7 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
   const [error, setError] = useState<string | null>(null);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [username, setUsername] = useState('');
+  const [creatorWallet, setCreatorWallet] = useState<Wallet | null>(null); // Store decrypted wallet
 
   useEffect(() => {
     const init = async () => {
@@ -58,15 +55,44 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
       const attemptFee = await contractService.getAttemptFee(onePUser);
       console.log('[Unlock] Attempt fee:', formatEther(attemptFee), '1P tokens');
 
-      // Step 2: Get hot wallet address from storage
-      const { hotWalletAddress } = await storage.get(['hotWalletAddress']);
-      if (!hotWalletAddress) {
-        throw new Error('Hot wallet address not found. Please reset your wallet.');
+      // Step 2: Load encrypted creator wallet data from storage
+      setLoadingMessage('Loading wallet...');
+      const { encryptedCreatorPrivateKey, encryptedEncryptionKey, creatorWalletAddress } =
+        await storage.get([
+          'encryptedCreatorPrivateKey',
+          'encryptedEncryptionKey',
+          'creatorWalletAddress',
+        ]);
+
+      if (!encryptedCreatorPrivateKey || !encryptedEncryptionKey || !creatorWalletAddress) {
+        throw new Error('Creator wallet not found. Please reset your wallet.');
       }
 
-      // Step 3: Check hot wallet has sufficient balance
+      // Step 3: Decrypt creator wallet (we need password for this)
+      setLoadingMessage('Decrypting wallet...');
+      console.log('[Unlock] Decrypting creator wallet...');
+
+      // For now, we'll need to prompt for password since we need it to decrypt the encryption key
+      // This is a temporary solution - in the future we might keep wallet unlocked in memory
+      const password = prompt('Enter your password to unlock wallet:');
+      if (!password) {
+        throw new Error('Password required to unlock wallet');
+      }
+
+      const { decryptWithPassword, decryptPrivateKey } = await import('@/utils/crypto');
+      const encryptionKey = await decryptWithPassword(encryptedEncryptionKey, password);
+      const privateKey = await decryptPrivateKey(encryptedCreatorPrivateKey, encryptionKey);
+
+      const { Wallet } = await import('ethers');
+      const creatorWallet = new Wallet(privateKey);
+      console.log('[Unlock] Creator wallet decrypted:', creatorWallet.address);
+
+      // Store wallet in state for later use
+      setCreatorWallet(creatorWallet);
+
+      // Step 4: Check creator wallet has sufficient balance
       setLoadingMessage('Checking balances...');
-      const balances = await checkBalances(hotWalletAddress, attemptFee);
+      const balances = await checkBalances(creatorWallet.address, attemptFee);
 
       console.log('[Unlock] Native balance:', formatEther(balances.nativeBalance), 'CTC');
       console.log('[Unlock] Token balance:', formatEther(balances.tokenBalance), '1P');
@@ -75,16 +101,21 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
         console.log('[Unlock] Insufficient funds, requesting airdrop...');
         setLoadingMessage('Requesting airdrop...');
 
-        // Use creator wallet for airdrop (no password needed)
-        const { Wallet } = await import('ethers');
-        const { configService } = await import('@/services/config');
-        const creatorPrivateKey = await configService.getCreatorPrivateKey();
-        if (!creatorPrivateKey) {
-          throw new Error('Creator private key not configured');
+        // Use decrypted creator wallet for airdrop with debug
+        const { createAirdropSignatureWithDebug } = await import('@/utils/signatureDebug');
+        const { message, signature, debug } = await createAirdropSignatureWithDebug(creatorWallet);
+
+        console.log('[Unlock] Signature debug info:', debug);
+
+        if (!debug.addressesMatch) {
+          console.error('[Unlock] ❌ CRITICAL: Signature address mismatch detected!');
+          console.error('[Unlock] Expected address:', debug.signerAddress);
+          console.error('[Unlock] Recovered address:', debug.recoveredAddress);
+          throw new Error(
+            `Signature verification failed: Expected ${debug.signerAddress} but recovered ${debug.recoveredAddress}`
+          );
         }
 
-        const creatorWallet = new Wallet(creatorPrivateKey);
-        const { message, signature } = await createAirdropSignature(creatorWallet);
         const airdropResult = await backendService.airdrop(message, signature);
 
         if (!airdropResult.success) {
@@ -95,6 +126,23 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
         if (airdropResult.transactions) {
           console.log('[Unlock] Native TX:', airdropResult.transactions.native);
           console.log('[Unlock] Token TX:', airdropResult.transactions.token);
+        }
+
+        // Validate that airdrop went to correct address
+        if (airdropResult.address) {
+          console.log('[Unlock] Backend extracted address:', airdropResult.address);
+          console.log('[Unlock] Expected address:', creatorWallet.address);
+
+          if (airdropResult.address.toLowerCase() !== creatorWallet.address.toLowerCase()) {
+            console.error('[Unlock] ❌ CRITICAL: Airdrop sent to wrong address!');
+            console.error('[Unlock] Expected:', creatorWallet.address);
+            console.error('[Unlock] Actual:', airdropResult.address);
+            throw new Error(
+              `Airdrop sent to wrong address: ${airdropResult.address} instead of ${creatorWallet.address}`
+            );
+          } else {
+            console.log('[Unlock] ✅ Airdrop sent to correct address');
+          }
         }
 
         // Poll for balance updates (retry up to 10 times with 2s delay = 20s max)
@@ -131,10 +179,10 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
         );
       }
 
-      // Step 4: Request attempt on-chain (using creator wallet from ENV)
+      // Step 5: Request attempt on-chain (using decrypted creator wallet)
       setLoadingMessage('Requesting authentication attempt...');
       console.log('[Unlock] Requesting authentication attempt...');
-      const attemptId = await contractService.requestAttempt(onePUser);
+      const attemptId = await contractService.requestAttempt(onePUser, creatorWallet);
       console.log('[Unlock] Attempt ID:', attemptId);
 
       // Step 5: Get attempt details from contract
@@ -143,7 +191,7 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
 
       // Step 6: Sign attempt ID for backend (using creator wallet)
       console.log('[Unlock] Creating signature for backend...');
-      const attemptSignature = await createAuthOptionsSignature(attemptId);
+      const attemptSignature = await createAuthOptionsSignature(creatorWallet, attemptId);
 
       // Step 7: Get challenges from backend
       setLoadingMessage('Fetching authentication challenges...');
@@ -184,7 +232,7 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
   };
 
   const handleChallengeSubmit = async (directions: Direction[]) => {
-    if (!challenge || !challenge.challengeId) {
+    if (!challenge || !challenge.challengeId || !creatorWallet) {
       return;
     }
 
@@ -213,7 +261,11 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
 
       // Sign challenge ID (using creator wallet)
       console.log('[Unlock] Signing solutions...');
-      const { signature } = await createAuthVerifySignature(challenge.challengeId, solutions);
+      const { signature } = await createAuthVerifySignature(
+        creatorWallet,
+        challenge.challengeId,
+        solutions
+      );
 
       console.log('[Unlock] Submitting solutions to backend...');
       const verifyResult = await backendService.verifyAuth(

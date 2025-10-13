@@ -70,6 +70,11 @@
     image-rendering: pixelated;
   }
 
+  .grid-cell-compact {
+    @apply font-data font-bold flex items-center justify-center border-2 border-black rounded-none transition-all duration-200 hover:scale-105 cursor-default;
+    image-rendering: pixelated;
+  }
+
   /* Pixel-art button base */
   .btn-pixel {
     @apply border-4 border-pixel-border shadow-pixel transition-transform hover:-translate-y-1 hover:shadow-pixel-lg active:translate-y-0 active:shadow-none rounded-none;

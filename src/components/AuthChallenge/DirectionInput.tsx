@@ -50,8 +50,8 @@ export const DirectionInput = ({ onDirection, disabled = false }: DirectionInput
   }, [onDirection, disabled]);
 
   return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-3 gap-4">
+    <div className="space-y-3">
+      <div className="grid grid-cols-3 gap-2">
         {/* Empty space */}
         <div />
 
@@ -59,9 +59,9 @@ export const DirectionInput = ({ onDirection, disabled = false }: DirectionInput
         <PixelButton
           onClick={() => onDirection('UP')}
           disabled={disabled}
-          size="lg"
+          size="sm"
           className={cn(
-            'h-24 font-pixel transition-all duration-200 hover:scale-110 active:scale-95',
+            'h-16 font-pixel transition-all duration-200 hover:scale-110 active:scale-95',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
           style={{
@@ -71,9 +71,9 @@ export const DirectionInput = ({ onDirection, disabled = false }: DirectionInput
           }}
           aria-label="Up (Red)"
         >
-          <div className="flex flex-col items-center gap-1">
-            <PixelArrowUp className="h-8 w-8" />
-            <span className="text-sm font-pixel tracking-wider">UP</span>
+          <div className="flex flex-col items-center gap-0.5">
+            <PixelArrowUp className="h-5 w-5" />
+            <span className="text-xs font-pixel tracking-wider">UP</span>
           </div>
         </PixelButton>
 
@@ -84,9 +84,9 @@ export const DirectionInput = ({ onDirection, disabled = false }: DirectionInput
         <PixelButton
           onClick={() => onDirection('LEFT')}
           disabled={disabled}
-          size="lg"
+          size="sm"
           className={cn(
-            'h-24 font-pixel transition-all duration-200 hover:scale-110 active:scale-95',
+            'h-16 font-pixel transition-all duration-200 hover:scale-110 active:scale-95',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
           style={{
@@ -96,9 +96,9 @@ export const DirectionInput = ({ onDirection, disabled = false }: DirectionInput
           }}
           aria-label="Left (Blue)"
         >
-          <div className="flex flex-col items-center gap-1">
-            <PixelArrowLeft className="h-8 w-8" />
-            <span className="text-sm font-pixel tracking-wider">LEFT</span>
+          <div className="flex flex-col items-center gap-0.5">
+            <PixelArrowLeft className="h-5 w-5" />
+            <span className="text-xs font-pixel tracking-wider">LEFT</span>
           </div>
         </PixelButton>
 
@@ -107,16 +107,16 @@ export const DirectionInput = ({ onDirection, disabled = false }: DirectionInput
           onClick={() => onDirection('SKIP')}
           disabled={disabled}
           variant="default"
-          size="lg"
+          size="sm"
           className={cn(
-            'h-24 font-pixel transition-all duration-200 hover:scale-105 active:scale-95',
+            'h-16 font-pixel transition-all duration-200 hover:scale-105 active:scale-95',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
           aria-label="Skip"
         >
-          <div className="flex flex-col items-center gap-1">
-            <SkipForward className="h-8 w-8 stroke-[3]" />
-            <span className="text-sm font-pixel tracking-wider">SKIP</span>
+          <div className="flex flex-col items-center gap-0.5">
+            <SkipForward className="h-5 w-5 stroke-[3]" />
+            <span className="text-xs font-pixel tracking-wider">SKIP</span>
           </div>
         </PixelButton>
 
@@ -124,9 +124,9 @@ export const DirectionInput = ({ onDirection, disabled = false }: DirectionInput
         <PixelButton
           onClick={() => onDirection('RIGHT')}
           disabled={disabled}
-          size="lg"
+          size="sm"
           className={cn(
-            'h-24 font-pixel transition-all duration-200 hover:scale-110 active:scale-95',
+            'h-16 font-pixel transition-all duration-200 hover:scale-110 active:scale-95',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
           style={{
@@ -136,9 +136,9 @@ export const DirectionInput = ({ onDirection, disabled = false }: DirectionInput
           }}
           aria-label="Right (Yellow)"
         >
-          <div className="flex flex-col items-center gap-1">
-            <PixelArrowRight className="h-8 w-8" />
-            <span className="text-sm font-pixel tracking-wider">RIGHT</span>
+          <div className="flex flex-col items-center gap-0.5">
+            <PixelArrowRight className="h-5 w-5" />
+            <span className="text-xs font-pixel tracking-wider">RIGHT</span>
           </div>
         </PixelButton>
 
@@ -149,9 +149,9 @@ export const DirectionInput = ({ onDirection, disabled = false }: DirectionInput
         <PixelButton
           onClick={() => onDirection('DOWN')}
           disabled={disabled}
-          size="lg"
+          size="sm"
           className={cn(
-            'h-24 font-pixel transition-all duration-200 hover:scale-110 active:scale-95',
+            'h-16 font-pixel transition-all duration-200 hover:scale-110 active:scale-95',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
           style={{
@@ -161,9 +161,9 @@ export const DirectionInput = ({ onDirection, disabled = false }: DirectionInput
           }}
           aria-label="Down (Green)"
         >
-          <div className="flex flex-col items-center gap-1">
-            <PixelArrowDown className="h-8 w-8" />
-            <span className="text-sm font-pixel tracking-wider">DOWN</span>
+          <div className="flex flex-col items-center gap-0.5">
+            <PixelArrowDown className="h-5 w-5" />
+            <span className="text-xs font-pixel tracking-wider">DOWN</span>
           </div>
         </PixelButton>
 
@@ -171,9 +171,9 @@ export const DirectionInput = ({ onDirection, disabled = false }: DirectionInput
         <div />
       </div>
 
-      <div className="border-4 border-pixel-border bg-pixel-bgDark p-4">
+      <div className="border-2 border-pixel-border bg-pixel-bgDark p-2">
         <p className="text-center text-xs font-pixelSmall text-pixel-text/80">
-          KEYBOARD: ARROW KEYS OR WASD • SPACE/ENTER TO SKIP
+          ARROW KEYS OR WASD • SPACE/ENTER TO SKIP
         </p>
       </div>
     </div>

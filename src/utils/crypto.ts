@@ -97,3 +97,97 @@ export async function decrypt(encryptedData: string, password: string): Promise<
   }
 }
 
+// Legacy functions for backward compatibility
+export const encryptWithPassword = encrypt;
+export const decryptWithPassword = decrypt;
+
+/**
+ * Generate a random 256-bit encryption key
+ */
+export function generateEncryptionKey(): string {
+  const keyBytes = crypto.getRandomValues(new Uint8Array(32));
+  return btoa(String.fromCharCode(...keyBytes));
+}
+
+/**
+ * Encrypt private key with encryption key (AES-GCM)
+ */
+export async function encryptPrivateKey(privateKey: string, encryptionKey: string): Promise<string> {
+  const encoder = new TextEncoder();
+
+  // Import encryption key
+  const keyBytes = new Uint8Array(
+    atob(encryptionKey)
+      .split('')
+      .map((c) => c.charCodeAt(0))
+  );
+
+  const key = await crypto.subtle.importKey(
+    'raw',
+    keyBytes,
+    { name: 'AES-GCM' },
+    false,
+    ['encrypt', 'decrypt']
+  );
+
+  // Generate IV
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+
+  // Encrypt private key
+  const encryptedData = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: iv },
+    key,
+    encoder.encode(privateKey)
+  );
+
+  // Combine iv + encrypted data
+  const combined = new Uint8Array(iv.length + encryptedData.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(encryptedData), iv.length);
+
+  // Return as base64
+  return btoa(String.fromCharCode(...combined));
+}
+
+/**
+ * Decrypt private key with encryption key (AES-GCM)
+ */
+export async function decryptPrivateKey(encryptedData: string, encryptionKey: string): Promise<string> {
+  try {
+    // Decode base64
+    const combined = new Uint8Array(
+      atob(encryptedData)
+        .split('')
+        .map((c) => c.charCodeAt(0))
+    );
+
+    // Extract iv and encrypted data
+    const iv = combined.slice(0, 12);
+    const data = combined.slice(12);
+
+    // Import encryption key
+    const keyBytes = new Uint8Array(
+      atob(encryptionKey)
+        .split('')
+        .map((c) => c.charCodeAt(0))
+    );
+
+    const key = await crypto.subtle.importKey(
+      'raw',
+      keyBytes,
+      { name: 'AES-GCM' },
+      false,
+      ['encrypt', 'decrypt']
+    );
+
+    // Decrypt
+    const decryptedData = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, data);
+
+    // Return as string
+    const decoder = new TextDecoder();
+    return decoder.decode(decryptedData);
+  } catch (error) {
+    throw new Error('Private key decryption failed. Invalid encryption key or corrupted data.');
+  }
+}
+

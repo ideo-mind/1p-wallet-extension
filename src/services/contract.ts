@@ -218,7 +218,7 @@ class ContractService {
    * Request an authentication attempt on-chain
    * Returns the attempt ID extracted from transaction events
    */
-  async requestAttempt(username: string): Promise<string> {
+  async requestAttempt(username: string, wallet: Wallet): Promise<string> {
     await this.ensureInitialized();
 
     if (!this.contract || !this.provider) {
@@ -226,14 +226,9 @@ class ContractService {
     }
 
     try {
-      // Create wallet from creator private key
-      const creatorPrivateKey = await configService.getCreatorPrivateKey();
-      if (!creatorPrivateKey) {
-        throw new Error('Creator private key not configured');
-      }
-
-      const creatorWallet = new Wallet(creatorPrivateKey, this.provider);
-      const contractWithSigner = this.contract.connect(creatorWallet);
+      // Connect provided wallet to provider
+      const connectedWallet = wallet.connect(this.provider);
+      const contractWithSigner = this.contract.connect(connectedWallet);
 
       // Call requestAttempt using getFunction
       const requestAttemptFn = contractWithSigner.getFunction('requestAttempt');

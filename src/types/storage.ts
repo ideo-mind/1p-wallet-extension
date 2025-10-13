@@ -31,9 +31,10 @@ export interface StorageSchema {
   onePUser: string; // username.1p
   custodialAddress: string;
 
-  // Hot wallet (encrypted)
-  hotWalletPrivkey: string;
-  hotWalletAddress: string;
+  // Creator wallet data (replaces hot wallet)
+  creatorWalletAddress: string; // User's main wallet address
+  encryptedCreatorPrivateKey: string; // AES-GCM encrypted private key
+  encryptedEncryptionKey: string; // Encryption key (encrypted with user password)
 
   // Settings
   network: 'creditcoin_mainnet' | 'creditcoin_testnet' | 'creditcoin_devnet' | 'mainnet';
@@ -59,7 +60,7 @@ export interface StorageSchema {
 
   // Authentication fields
   colorDirectionMap: ColorDirectionMapping; // User's color-to-direction mapping
-  password: string; // User's single character password (encrypted)
+  encryptedPassword: string; // User's single character password (encrypted)
   isLocked: boolean; // Wallet lock state
 
   // Registration data
@@ -67,5 +68,10 @@ export interface StorageSchema {
 
   // Current attempt tracking
   lastAttemptId?: string; // Last authentication attempt ID
+
+  // Legacy fields (for migration)
+  hotWalletPrivkey?: string; // Deprecated: Hot wallet private key
+  hotWalletAddress?: string; // Deprecated: Hot wallet address
+  password?: string; // Deprecated: Old password field
 }
 

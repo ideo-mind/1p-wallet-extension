@@ -97,23 +97,32 @@ export const ChallengeContainer = ({ challenge, onSubmit, onCancel }: ChallengeC
   const currentGrid = challenge.grids[currentRound];
 
   return (
-    <div className="space-y-6 animate-fade-in relative">
+    <div className="h-full flex flex-col space-y-3 animate-fade-in relative">
       <UnifiedBackground variant="subtle" color="blue" />
 
-      <div className="relative z-10">
+      {/* Compact Progress */}
+      <div className="relative z-10 flex-shrink-0">
         <ProgressBar current={currentRound + 1} total={challenge.rounds} />
       </div>
 
-      <div className="relative z-10">
+      {/* Grid - Takes most space */}
+      <div className="relative z-10 flex-1 min-h-0">
         <Grid grid={currentGrid} currentRound={currentRound + 1} totalRounds={challenge.rounds} />
       </div>
 
-      <div className="relative z-10">
+      {/* Direction Input - Compact */}
+      <div className="relative z-10 flex-shrink-0">
         <DirectionInput onDirection={handleDirectionSelect} disabled={submitting} />
       </div>
 
+      {/* Cancel Button - Compact */}
       {onCancel && (
-        <Button onClick={onCancel} variant="ghost" className="w-full relative z-10 hover:scale-105 transition-all duration-200" size="sm">
+        <Button
+          onClick={onCancel}
+          variant="ghost"
+          className="w-full relative z-10 hover:scale-105 transition-all duration-200"
+          size="sm"
+        >
           Cancel
         </Button>
       )}

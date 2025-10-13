@@ -51,6 +51,10 @@ class ConfigService {
     return this.appConfig.contractAddress;
   }
 
+  /**
+   * @deprecated This method is deprecated. Creator wallets are now generated per user during registration.
+   * This is kept for backward compatibility and testing only.
+   */
   getCreatorPrivateKey(): string {
     return this.appConfig.creatorPrivateKey;
   }

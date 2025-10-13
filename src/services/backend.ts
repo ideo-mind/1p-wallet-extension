@@ -44,6 +44,7 @@ export interface AirdropResponse {
     native?: string;
     token?: string;
   };
+  address?: string; // Address that the backend extracted from signature
   error?: string;
 }
 
