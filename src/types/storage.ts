@@ -35,7 +35,8 @@ export interface StorageSchema {
   // Creator wallet data (replaces hot wallet)
   creatorWalletAddress: Address; // User's main wallet address
   encryptedCreatorPrivateKey: string; // AES-GCM encrypted private key (Hex)
-  encryptedEncryptionKey: string; // Encryption key (encrypted with user password)
+  encryptedEncryptionKey: string; // Encryption key (encrypted with user password) - DEPRECATED
+  encryptionKey: string; // Unencrypted encryption key (chrome.storage.local is already secure)
 
   // Settings
   network: 'creditcoin_mainnet' | 'creditcoin_testnet' | 'creditcoin_devnet' | 'mainnet';

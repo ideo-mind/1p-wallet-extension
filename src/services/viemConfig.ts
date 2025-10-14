@@ -1,7 +1,14 @@
 // Viem Configuration
 // Sets up public and wallet clients for the 1P Wallet
 
-import { createPublicClient, createWalletClient, http, type Address, type Chain } from 'viem';
+import {
+  createPublicClient,
+  createWalletClient,
+  http,
+  type Account,
+  type Address,
+  type Chain,
+} from 'viem';
 import { configService } from './config';
 
 // Custom chain configuration for Creditcoin Testnet
@@ -78,7 +85,7 @@ class ViemConfigService {
   }
 
   // Create a wallet client with a specific account
-  async createWalletClientWithAccount(account: Address) {
+  async createWalletClientWithAccount(account: Account | Address) {
     if (!this.initialized) {
       throw new Error('Viem config not initialized. Call initialize() first.');
     }
@@ -87,7 +94,7 @@ class ViemConfigService {
     return createWalletClient({
       chain: creditcoinTestnet,
       transport: http(rpcUrl),
-      account,
+      account: typeof account === 'string' ? account : account,
     });
   }
 

@@ -2,7 +2,14 @@
 // Handles all interactions with the OneP contract on-chain
 
 import OnePAbiData from '@/utils/OneP_Abi.json';
-import { createPublicClient, type Account, type Address, type Hash } from 'viem';
+import {
+  createPublicClient,
+  decodeEventLog,
+  TransactionReceipt,
+  type Account,
+  type Address,
+  type Hash,
+} from 'viem';
 import { getBalance, readContract, waitForTransactionReceipt, writeContract } from 'viem/actions';
 import { configService } from './config';
 import { viemConfigService } from './viemConfig';
@@ -110,7 +117,7 @@ class ContractService {
 
     try {
       // Create wallet client with the account
-      const walletClient = await viemConfigService.createWalletClientWithAccount(account.address);
+      const walletClient = await viemConfigService.createWalletClientWithAccount(account);
 
       // Call register function using viem writeContract
       const hash = await writeContract(walletClient, {
@@ -118,6 +125,7 @@ class ContractService {
         abi: ONE_P_ABI,
         functionName: 'register',
         args: [username, name, imageUrl],
+        account: account,
         gas: 500000n,
       });
 
@@ -128,8 +136,16 @@ class ContractService {
         hash,
       });
 
+      console.log('[Contract] Registration receipt:', {
+        status: receipt.status,
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed,
+      });
+
       if (!receipt || receipt.status !== 'success') {
-        throw new Error('Registration transaction failed');
+        throw new Error(
+          `Registration transaction failed - Status: ${receipt.status}, Block: ${receipt.blockNumber}`
+        );
       }
 
       console.log('[Contract] Registration confirmed in block:', receipt.blockNumber);
@@ -240,7 +256,7 @@ class ContractService {
 
     try {
       // Create wallet client with the account
-      const walletClient = await viemConfigService.createWalletClientWithAccount(account.address);
+      const walletClient = await viemConfigService.createWalletClientWithAccount(account);
 
       // Call requestAttempt using viem writeContract
       const hash = await writeContract(walletClient, {
@@ -248,6 +264,7 @@ class ContractService {
         abi: ONE_P_ABI,
         functionName: 'requestAttempt',
         args: [username],
+        account: account,
         gas: 500000n,
       });
 
@@ -283,14 +300,12 @@ class ContractService {
   /**
    * Extract attempt ID from transaction receipt
    */
-  private extractAttemptIdFromReceipt(receipt: any): string | null {
+  private extractAttemptIdFromReceipt(receipt: TransactionReceipt): string | null {
     if (!receipt || !receipt.logs || !Array.isArray(receipt.logs)) {
       return null;
     }
 
     // Find AttemptCreated event using viem's decodeEventLog
-    const { decodeEventLog } = require('viem');
-
     for (const log of receipt.logs) {
       try {
         const decoded = decodeEventLog({
@@ -299,8 +314,8 @@ class ContractService {
           topics: log.topics,
         });
 
-        if (decoded.eventName === 'AttemptCreated') {
-          const attemptId = (decoded.args as any).id;
+        if (decoded.eventName === 'AttemptCreated' && decoded.args && 'id' in decoded.args) {
+          const attemptId = decoded.args.id as bigint;
           return attemptId.toString();
         }
       } catch (error) {
@@ -327,16 +342,24 @@ class ContractService {
         address: this.contractAddress,
         abi: ONE_P_ABI,
         functionName: 'getAttempt',
-        args: [attemptId],
-      })) as [bigint, string, string, bigint, bigint, number];
+        args: [BigInt(attemptId)],
+      })) as {
+        id: bigint;
+        onePUser: string;
+        hotWallet: string;
+        expiresAt: bigint;
+        difficulty: bigint;
+        status: number;
+      };
+      console.log('[Contract] Attempt info:', attempt);
 
       return {
-        id: attempt[0],
-        onePUser: attempt[1],
-        hotWallet: attempt[2] as Address,
-        expiresAt: attempt[3],
-        difficulty: attempt[4],
-        status: Number(attempt[5]),
+        id: attempt.id,
+        onePUser: attempt.onePUser,
+        hotWallet: attempt.hotWallet as Address,
+        expiresAt: attempt.expiresAt,
+        difficulty: attempt.difficulty,
+        status: Number(attempt.status),
       };
     } catch (error) {
       console.error('[Contract] Error getting attempt:', error);
@@ -439,7 +462,183 @@ class ContractService {
   getPublicClient() {
     return this.publicClient;
   }
+
+  /**
+   * Send native tCTC tokens from one account to another
+   * @param fromAccount Account to send from
+   * @param toAddress Address to send to
+   * @param amount Amount to send in wei
+   * @returns Transaction hash
+   */
+  async sendNativeToken(fromAccount: Account, toAddress: Address, amount: bigint): Promise<Hash> {
+    await this.ensureInitialized();
+
+    if (!this.publicClient) {
+      throw new Error('Contract not initialized');
+    }
+
+    try {
+      // Create wallet client with the sender account
+      const walletClient = await viemConfigService.createWalletClientWithAccount(fromAccount);
+
+      // Send transaction
+      const hash = await walletClient.sendTransaction({
+        account: fromAccount,
+        to: toAddress,
+        value: amount,
+      });
+
+      console.log('[Contract] Native token transfer sent:', hash);
+
+      // Wait for confirmation
+      const receipt = await waitForTransactionReceipt(this.publicClient, {
+        hash,
+      });
+
+      if (!receipt || receipt.status !== 'success') {
+        throw new Error('Native token transfer failed');
+      }
+
+      console.log('[Contract] Native token transfer confirmed in block:', receipt.blockNumber);
+
+      return hash;
+    } catch (error) {
+      console.error('[Contract] Native token transfer error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Native token transfer failed');
+    }
+  }
+
+  /**
+   * Transfer 1P tokens from one account to another
+   * @param fromAccount Account to send from
+   * @param toAddress Address to send to
+   * @param amount Amount to send in wei
+   * @returns Transaction hash
+   */
+  async transferTokens(fromAccount: Account, toAddress: Address, amount: bigint): Promise<Hash> {
+    await this.ensureInitialized();
+
+    if (!this.contractAddress || !this.publicClient) {
+      throw new Error('Contract not initialized');
+    }
+
+    try {
+      // Create wallet client with the sender account
+      const walletClient = await viemConfigService.createWalletClientWithAccount(fromAccount);
+
+      // Check if contract is paused
+      const isPaused = (await readContract(this.publicClient, {
+        address: this.contractAddress,
+        abi: ONE_P_ABI,
+        functionName: 'paused',
+      })) as boolean;
+
+      console.log('[Contract] Token contract paused status:', isPaused);
+
+      if (isPaused) {
+        // Check if the sender is the owner
+        const owner = (await readContract(this.publicClient, {
+          address: this.contractAddress,
+          abi: ONE_P_ABI,
+          functionName: 'owner',
+        })) as Address;
+
+        console.log('[Contract] Contract owner:', owner);
+        console.log('[Contract] Sender account:', fromAccount.address);
+
+        if (owner.toLowerCase() === fromAccount.address.toLowerCase()) {
+          console.log('[Contract] Sender is owner, using mint function');
+          // Use mint if sender is owner
+          const hash = await writeContract(walletClient, {
+            address: this.contractAddress,
+            abi: ONE_P_ABI,
+            functionName: 'mint',
+            args: [toAddress, amount],
+            account: fromAccount,
+            gas: 150000n,
+          });
+
+          console.log('[Contract] Token mint sent:', hash);
+
+          // Wait for confirmation
+          const receipt = await waitForTransactionReceipt(this.publicClient, {
+            hash,
+          });
+
+          console.log('[Contract] Token mint receipt:', {
+            status: receipt.status,
+            blockNumber: receipt.blockNumber,
+            gasUsed: receipt.gasUsed,
+          });
+
+          if (!receipt || receipt.status !== 'success') {
+            throw new Error(
+              `Token mint failed - Status: ${receipt?.status}, Block: ${receipt?.blockNumber}`
+            );
+          }
+
+          console.log('[Contract] Token mint confirmed in block:', receipt.blockNumber);
+          return hash;
+        } else {
+          throw new Error(
+            `Contract is paused and sender (${fromAccount.address}) is not the owner (${owner}). ` +
+              `Cannot transfer tokens. Please unpause the contract or use the owner account.`
+          );
+        }
+      }
+
+      // Contract is not paused, use normal transfer
+      // First check if sender has enough balance
+      const senderBalance = await this.balanceOf(fromAccount.address);
+      console.log('[Contract] Sender balance:', senderBalance.toString(), 'wei');
+      console.log('[Contract] Amount to transfer:', amount.toString(), 'wei');
+
+      if (senderBalance < amount) {
+        throw new Error(
+          `Insufficient token balance. Has: ${senderBalance.toString()}, Needs: ${amount.toString()}`
+        );
+      }
+
+      const hash = await writeContract(walletClient, {
+        address: this.contractAddress,
+        abi: ONE_P_ABI,
+        functionName: 'transfer',
+        args: [toAddress, amount],
+        account: fromAccount,
+      });
+
+      console.log('[Contract] Token transfer sent:', hash);
+
+      // Wait for confirmation
+      const receipt = await waitForTransactionReceipt(this.publicClient, {
+        hash,
+      });
+
+      console.log('[Contract] Token transfer receipt:', {
+        status: receipt.status,
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed,
+      });
+
+      if (!receipt || receipt.status !== 'success') {
+        throw new Error(
+          `Token transfer failed - Status: ${receipt?.status}, Block: ${receipt?.blockNumber}`
+        );
+      }
+
+      console.log('[Contract] Token transfer confirmed in block:', receipt.blockNumber);
+
+      return hash;
+    } catch (error) {
+      console.error('[Contract] Token transfer error:', error);
+
+      // Log detailed error information
+      if (error && typeof error === 'object') {
+        console.error('[Contract] Error details:', error);
+      }
+
+      throw new Error(error instanceof Error ? error.message : 'Token transfer failed');
+    }
+  }
 }
-
 export const contractService = new ContractService();
-

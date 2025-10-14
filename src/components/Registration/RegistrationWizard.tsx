@@ -13,12 +13,10 @@ import { backendService } from '@/services/backend';
 import { contractService } from '@/services/contract';
 import { storage } from '@/services/storage';
 import { ColorDirectionMapping } from '@/types/storage';
-import { checkBalances } from '@/utils/balanceChecker';
 import { createRegistrationSignature } from '@/utils/signatures';
 import { createRandomWallet } from '@/utils/wallet';
 import { Brush, CheckCircle2, Key, Lock, Palette, User, UserPlus, Zap } from 'lucide-react';
 import { useState } from 'react';
-import { formatEther, parseEther } from 'viem';
 import { UsernameInput } from './UsernameInput';
 
 type Step = 'welcome' | 'username' | 'password' | 'colorMapping' | 'complete';
@@ -73,96 +71,36 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
       const encryptedEncryptionKey = await encryptWithPassword(encryptionKey, password);
       const encryptedPassword = await encryptWithPassword(password, password);
 
+      // Store unencrypted encryption key for unlock flow (chrome.storage.local is secure)
+
       console.log('[Registration] Wallet secured with encryption');
 
-      // Step 3: Check balances and request airdrop if needed
-      setLoadingMessage('Checking balances...');
-      console.log('[Registration] Checking balances...');
-      const REGISTRATION_FEE = parseEther('100'); // 100 1P tokens
-      const balances = await checkBalances(walletInfo.address, REGISTRATION_FEE);
+      // Step 3: Fund new wallet with native tCTC and 1P tokens
+      setLoadingMessage('Funding wallet...');
+      console.log('[Registration] Funding new wallet with initial tokens...');
 
-      console.log('[Registration] Native balance:', formatEther(balances.nativeBalance), 'CTC');
-      console.log('[Registration] Token balance:', formatEther(balances.tokenBalance), '1P');
+      const { fundNewWallet } = await import('@/utils/directFunding');
+      const fundingResult = await fundNewWallet(walletInfo.address);
 
-      if (balances.needsAirdrop) {
-        console.log('[Registration] Insufficient funds, requesting airdrop...');
-        setLoadingMessage('Requesting airdrop...');
-
-        // Debug signature creation to identify address extraction issue
-        const { createAirdropSignatureWithDebug } = await import('@/utils/signatureDebug');
-        const { message, signature, debug } = await createAirdropSignatureWithDebug(creatorWallet);
-
-        console.log('[Registration] Signature debug info:', debug);
-
-        if (!debug.addressesMatch) {
-          console.error('[Registration] ❌ CRITICAL: Signature address mismatch detected!');
-          console.error('[Registration] Expected address:', debug.signerAddress);
-          console.error('[Registration] Recovered address:', debug.recoveredAddress);
-          throw new Error(
-            `Signature verification failed: Expected ${debug.signerAddress} but recovered ${debug.recoveredAddress}`
-          );
-        }
-
-        const airdropResult = await backendService.airdrop(message, signature);
-
-        if (!airdropResult.success) {
-          throw new Error(airdropResult.error || 'Airdrop failed. Please contact support.');
-        }
-
-        console.log('[Registration] Airdrop successful!');
-        if (airdropResult.transactions) {
-          console.log('[Registration] Native TX:', airdropResult.transactions.native);
-          console.log('[Registration] Token TX:', airdropResult.transactions.token);
-        }
-
-        // Validate that airdrop went to correct address
-        if (airdropResult.address) {
-          console.log('[Registration] Backend extracted address:', airdropResult.address);
-          console.log('[Registration] Expected address:', creatorWallet.address);
-
-          if (airdropResult.address.toLowerCase() !== creatorWallet.address.toLowerCase()) {
-            console.error('[Registration] ❌ CRITICAL: Airdrop sent to wrong address!');
-            console.error('[Registration] Expected:', creatorWallet.address);
-            console.error('[Registration] Actual:', airdropResult.address);
-            throw new Error(
-              `Airdrop sent to wrong address: ${airdropResult.address} instead of ${creatorWallet.address}`
-            );
-          } else {
-            console.log('[Registration] ✅ Airdrop sent to correct address');
-          }
-        }
-
-        // Poll for balance updates (retry up to 10 times with 2s delay = 20s max)
-        setLoadingMessage('Waiting for airdrop confirmation...');
-        const { pollForBalances } = await import('@/utils/balancePoller');
-        const NATIVE_THRESHOLD = parseEther('0.1');
-
-        const pollResult = await pollForBalances(
-          walletInfo.address,
-          NATIVE_THRESHOLD,
-          REGISTRATION_FEE,
-          10, // Max 10 attempts
-          2000 // 2 second delay between attempts
-        );
-
-        if (!pollResult.success) {
-          console.error('[Registration] Balances after polling:', {
-            native: formatEther(pollResult.nativeBalance),
-            tokens: formatEther(pollResult.tokenBalance),
-            attempts: pollResult.attempts,
-          });
-          throw new Error(
-            `Airdrop completed but balances still insufficient after ${pollResult.attempts} checks. ` +
-              `Current: ${formatEther(pollResult.nativeBalance)} CTC, ${formatEther(pollResult.tokenBalance)} 1P. ` +
-              `Please wait a moment and try again or contact support.`
-          );
-        }
-
+      if (fundingResult.success) {
+        console.log('[Registration] ✅ Wallet funded successfully!');
+        console.log('[Registration] Native TX:', fundingResult.nativeTxHash);
+        console.log('[Registration] Token TX:', fundingResult.tokenTxHash);
         console.log(
-          '[Registration] Balances sufficient after airdrop (took',
-          pollResult.attempts,
-          'attempts)'
+          '[Registration] Amounts:',
+          fundingResult.nativeAmount,
+          'CTC,',
+          fundingResult.tokenAmount,
+          '1P'
         );
+      } else if (fundingResult.insufficientFunds) {
+        console.warn('[Registration] ⚠️ Creator account has insufficient funds');
+        console.warn('[Registration] User will need to manually fund their wallet');
+        // Don't throw error - continue with registration
+      } else {
+        console.warn('[Registration] ⚠️ Funding failed:', fundingResult.error);
+        console.warn('[Registration] User will need to manually fund their wallet');
+        // Don't throw error - continue with registration
       }
 
       // Step 4: Register on-chain (costs 100 1P tokens)
@@ -256,6 +194,7 @@ export const RegistrationWizard = ({ onComplete }: RegistrationWizardProps) => {
         creatorWalletAddress: walletInfo.address,
         encryptedCreatorPrivateKey,
         encryptedEncryptionKey,
+        encryptionKey, // Store unencrypted for unlock (chrome.storage.local is secure)
         encryptedPassword,
         colorDirectionMap,
         isLocked: false, // Unlocked initially
