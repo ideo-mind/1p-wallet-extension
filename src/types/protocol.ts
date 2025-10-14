@@ -52,6 +52,48 @@ export interface UserProfile {
 }
 
 /**
+ * Parse grid string from backend into ColorGroups
+ * Backend sends: "JQVA=*@:Yvgjd<!zDk{$1x.;P}7iC9h>f&q2e|Wp5?_+(#u]),^-t8s40Rw%6y3"
+ * Need to extract characters by color based on user's secret character
+ */
+export function parseGridToColorGroups(
+  gridString: string,
+  userSecret: string,
+  _colorDirectionMap: { RED: Direction; GREEN: Direction; BLUE: Direction; YELLOW: Direction }
+): ColorGroups {
+  const colorGroups: ColorGroups = {
+    red: [],
+    green: [],
+    blue: [],
+    yellow: []
+  };
+
+  // Find the position of user's secret character in the grid
+  const secretIndex = gridString.indexOf(userSecret);
+
+  if (secretIndex === -1) {
+    // Secret character not found, return empty groups
+    return colorGroups;
+  }
+
+  // Based on the secret character's position and the color-direction mapping,
+  // we need to determine which characters belong to which color
+  // This is a simplified version - the actual algorithm would be more complex
+
+  // For now, let's create a basic mapping based on character positions
+  // This needs to match the backend's algorithm exactly
+  const totalChars = gridString.length;
+  const charsPerColor = Math.floor(totalChars / 4);
+
+  colorGroups.red = Array.from(gridString.slice(0, charsPerColor));
+  colorGroups.green = Array.from(gridString.slice(charsPerColor, charsPerColor * 2));
+  colorGroups.blue = Array.from(gridString.slice(charsPerColor * 2, charsPerColor * 3));
+  colorGroups.yellow = Array.from(gridString.slice(charsPerColor * 3, totalChars));
+
+  return colorGroups;
+}
+
+/**
  * Convert backend ColorGroups format to ColoredGrid for UI
  * Backend sends: { red: ["A", "F"], green: ["B", "G"], ... }
  * UI needs: { letters: [[...]], colors: [[...]] }

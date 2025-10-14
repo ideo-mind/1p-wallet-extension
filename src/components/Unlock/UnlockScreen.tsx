@@ -135,9 +135,60 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
       console.log('[Unlock] Received', challenges.length, 'challenges');
 
       // Step 8: Convert challenges to grids for UI
+      console.log('[Unlock] Processing challenges:', challenges);
+
       const grids = challenges
-        .filter((ch) => ch && ch.colorGroups) // Filter out undefined challenges
-        .map((ch, idx) => colorGroupsToGrid(ch.colorGroups, idx + 1));
+        .filter((ch) => ch && (ch.grid || ch.colorGroups)) // Filter out undefined challenges
+        .map((ch, idx) => {
+          console.log(`[Unlock] Challenge ${idx + 1}:`, ch);
+
+          if (ch.colorGroups) {
+            // Backend returned colorGroups directly
+            console.log(`[Unlock] Using colorGroups for challenge ${idx + 1}`);
+            return colorGroupsToGrid(ch.colorGroups, idx + 1);
+          } else if (ch.grid) {
+            // Backend returned grid string - need to parse it
+            console.log(`[Unlock] Parsing grid string for challenge ${idx + 1}`);
+
+            // For now, create a simple grid from the string
+            // This is a temporary solution - the actual parsing needs to match backend algorithm
+            const gridChars = Array.from(ch.grid);
+            const cols = 8; // Assume 8 columns
+            const rows = Math.ceil(gridChars.length / cols);
+
+            const letters: string[][] = [];
+            const colors: string[][] = [];
+
+            for (let i = 0; i < rows; i++) {
+              const rowLetters: string[] = [];
+              const rowColors: string[] = [];
+
+              for (let j = 0; j < cols; j++) {
+                const index = i * cols + j;
+                if (index < gridChars.length) {
+                  rowLetters.push(gridChars[index]);
+                  rowColors.push('#FFFFFF'); // Default white color
+                } else {
+                  rowLetters.push('');
+                  rowColors.push('#FFFFFF');
+                }
+              }
+
+              letters.push(rowLetters);
+              colors.push(rowColors);
+            }
+
+            return {
+              letters,
+              colors,
+              rows,
+              cols,
+              round: idx + 1,
+            };
+          }
+
+          throw new Error(`Invalid challenge format: ${JSON.stringify(ch)}`);
+        });
 
       if (grids.length === 0) {
         throw new Error('No valid challenges received from backend');
