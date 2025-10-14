@@ -121,8 +121,8 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
       const attemptSignature = await createAuthOptionsSignature(creatorWallet, attemptId);
 
       // Step 7: Get challenges from backend
-      setLoadingMessage('Fetching authentication challenges...');
-      console.log('[Unlock] Fetching authentication challenges...');
+      setLoadingMessage('Authenticating ...');
+      console.log('[Unlock] Authenticating...');
       const authOptions = await backendService.getAuthOptions(attemptId, attemptSignature);
 
       const challenges = authOptions.challenges || [];
