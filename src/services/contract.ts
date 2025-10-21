@@ -2,8 +2,17 @@
 // Handles all interactions with the OneP contract on-chain
 
 import OnePAbiData from '@/utils/OneP_Abi.json';
-import { Contract, JsonRpcProvider, Wallet } from 'ethers';
+import {
+  createPublicClient,
+  decodeEventLog,
+  TransactionReceipt,
+  type Account,
+  type Address,
+  type Hash,
+} from 'viem';
+import { getBalance, readContract, waitForTransactionReceipt, writeContract } from 'viem/actions';
 import { configService } from './config';
+import { viemConfigService } from './viemConfig';
 
 // Contract ABI
 const ONE_P_ABI = OnePAbiData.abi;
@@ -11,7 +20,7 @@ const ONE_P_ABI = OnePAbiData.abi;
 interface UserProfile {
   name: string;
   img: string;
-  account: string;
+  account: Address;
 }
 
 interface UserState {
@@ -27,15 +36,15 @@ interface UserState {
 interface AttemptInfo {
   id: bigint;
   onePUser: string;
-  hotWallet: string;
+  hotWallet: Address;
   expiresAt: bigint;
   difficulty: bigint;
   status: number;
 }
 
 class ContractService {
-  private provider: JsonRpcProvider | null = null;
-  private contract: Contract | null = null;
+  private publicClient: ReturnType<typeof createPublicClient> | null = null;
+  private contractAddress: Address | null = null;
   private initialized = false;
 
   async initialize(): Promise<void> {
@@ -44,11 +53,13 @@ class ContractService {
     }
 
     try {
-      const rpcUrl = await configService.getRpcUrl();
+      // Initialize viem config first
+      await viemConfigService.initialize();
+
       const contractAddress = await configService.getOnePContractAddress();
 
-      this.provider = new JsonRpcProvider(rpcUrl);
-      this.contract = new Contract(contractAddress, ONE_P_ABI, this.provider);
+      this.publicClient = viemConfigService.getPublicClient();
+      this.contractAddress = contractAddress as Address;
 
       this.initialized = true;
       console.log('[Contract Service] Initialized with address:', contractAddress);
@@ -70,13 +81,18 @@ class ContractService {
   async usernameExists(username: string): Promise<boolean> {
     await this.ensureInitialized();
 
-    if (!this.contract) {
+    if (!this.publicClient || !this.contractAddress) {
       throw new Error('Contract not initialized');
     }
 
     try {
-      const exists = (await this.contract.usernameExists(username)) as unknown as boolean;
-      return exists;
+      const exists = await readContract(this.publicClient, {
+        address: this.contractAddress,
+        abi: ONE_P_ABI,
+        functionName: 'usernameExists',
+        args: [username],
+      });
+      return exists as boolean;
     } catch (error) {
       console.error('[Contract] Error checking username:', error);
       return false;
@@ -91,40 +107,50 @@ class ContractService {
     username: string,
     name: string,
     imageUrl: string,
-    signer: Wallet
-  ): Promise<string> {
+    account: Account
+  ): Promise<Hash> {
     await this.ensureInitialized();
 
-    if (!this.contract || !this.provider) {
+    if (!this.contractAddress) {
       throw new Error('Contract not initialized');
     }
 
     try {
-      // Connect signer to provider
-      const connectedSigner = signer.connect(this.provider);
-      const contractWithSigner = this.contract.connect(connectedSigner);
+      // Create wallet client with the account
+      const walletClient = await viemConfigService.createWalletClientWithAccount(account);
 
-      // Call register function using getFunction
-      const registerFn = contractWithSigner.getFunction('register');
-      const tx = (await registerFn(username, name, imageUrl, {
-        gasLimit: 500000,
-      })) as unknown as {
-        hash: string;
-        wait: () => Promise<{ status?: number; blockNumber?: number }>;
-      };
+      // Call register function using viem writeContract
+      const hash = await writeContract(walletClient, {
+        address: this.contractAddress,
+        abi: ONE_P_ABI,
+        functionName: 'register',
+        args: [username, name, imageUrl],
+        account: account,
+        gas: 500000n,
+      });
 
-      console.log('[Contract] Registration transaction sent:', tx.hash);
+      console.log('[Contract] Registration transaction sent:', hash);
 
       // Wait for confirmation
-      const receipt = await tx.wait();
+      const receipt = await waitForTransactionReceipt(this.publicClient!, {
+        hash,
+      });
 
-      if (!receipt || receipt.status === 0) {
-        throw new Error('Registration transaction failed');
+      console.log('[Contract] Registration receipt:', {
+        status: receipt.status,
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed,
+      });
+
+      if (!receipt || receipt.status !== 'success') {
+        throw new Error(
+          `Registration transaction failed - Status: ${receipt.status}, Block: ${receipt.blockNumber}`
+        );
       }
 
       console.log('[Contract] Registration confirmed in block:', receipt.blockNumber);
 
-      return tx.hash;
+      return hash;
     } catch (error) {
       console.error('[Contract] Registration error:', error);
       throw new Error(error instanceof Error ? error.message : 'Registration failed');
@@ -137,21 +163,22 @@ class ContractService {
   async getUserProfile(username: string): Promise<UserProfile> {
     await this.ensureInitialized();
 
-    if (!this.contract) {
+    if (!this.publicClient || !this.contractAddress) {
       throw new Error('Contract not initialized');
     }
 
     try {
-      const profile = (await this.contract.getUserProfile(username)) as unknown as [
-        string,
-        string,
-        string,
-      ];
+      const profile = (await readContract(this.publicClient, {
+        address: this.contractAddress,
+        abi: ONE_P_ABI,
+        functionName: 'getUserProfile',
+        args: [username],
+      })) as [string, string, string];
 
       return {
         name: profile[0],
         img: profile[1],
-        account: profile[2],
+        account: profile[2] as Address,
       };
     } catch (error) {
       console.error('[Contract] Error getting user profile:', error);
@@ -165,20 +192,17 @@ class ContractService {
   async getUserState(username: string): Promise<UserState> {
     await this.ensureInitialized();
 
-    if (!this.contract) {
+    if (!this.publicClient || !this.contractAddress) {
       throw new Error('Contract not initialized');
     }
 
     try {
-      const state = (await this.contract.getUserState(username)) as unknown as [
-        bigint,
-        bigint,
-        bigint,
-        bigint,
-        bigint,
-        bigint,
-        boolean,
-      ];
+      const state = (await readContract(this.publicClient, {
+        address: this.contractAddress,
+        abi: ONE_P_ABI,
+        functionName: 'getUserState',
+        args: [username],
+      })) as [bigint, bigint, bigint, bigint, bigint, bigint, boolean];
 
       return {
         totalAttempts: state[0],
@@ -201,12 +225,17 @@ class ContractService {
   async getAttemptFee(username: string): Promise<bigint> {
     await this.ensureInitialized();
 
-    if (!this.contract) {
+    if (!this.publicClient || !this.contractAddress) {
       throw new Error('Contract not initialized');
     }
 
     try {
-      const fee = (await this.contract.getAttemptFee(username)) as unknown as bigint;
+      const fee = (await readContract(this.publicClient, {
+        address: this.contractAddress,
+        abi: ONE_P_ABI,
+        functionName: 'getAttemptFee',
+        args: [username],
+      })) as bigint;
       return fee;
     } catch (error) {
       console.error('[Contract] Error getting attempt fee:', error);
@@ -218,33 +247,35 @@ class ContractService {
    * Request an authentication attempt on-chain
    * Returns the attempt ID extracted from transaction events
    */
-  async requestAttempt(username: string, wallet: Wallet): Promise<string> {
+  async requestAttempt(username: string, account: Account): Promise<string> {
     await this.ensureInitialized();
 
-    if (!this.contract || !this.provider) {
+    if (!this.contractAddress) {
       throw new Error('Contract not initialized');
     }
 
     try {
-      // Connect provided wallet to provider
-      const connectedWallet = wallet.connect(this.provider);
-      const contractWithSigner = this.contract.connect(connectedWallet);
+      // Create wallet client with the account
+      const walletClient = await viemConfigService.createWalletClientWithAccount(account);
 
-      // Call requestAttempt using getFunction
-      const requestAttemptFn = contractWithSigner.getFunction('requestAttempt');
-      const tx = (await requestAttemptFn(username, {
-        gasLimit: 500000,
-      })) as unknown as {
-        hash: string;
-        wait: () => Promise<{ status?: number; blockNumber?: number; logs?: unknown[] }>;
-      };
+      // Call requestAttempt using viem writeContract
+      const hash = await writeContract(walletClient, {
+        address: this.contractAddress,
+        abi: ONE_P_ABI,
+        functionName: 'requestAttempt',
+        args: [username],
+        account: account,
+        gas: 500000n,
+      });
 
-      console.log('[Contract] Request attempt transaction sent:', tx.hash);
+      console.log('[Contract] Request attempt transaction sent:', hash);
 
       // Wait for confirmation
-      const receipt = await tx.wait();
+      const receipt = await waitForTransactionReceipt(this.publicClient!, {
+        hash,
+      });
 
-      if (!receipt || receipt.status === 0) {
+      if (!receipt || receipt.status !== 'success') {
         throw new Error('Request attempt transaction failed');
       }
 
@@ -269,30 +300,22 @@ class ContractService {
   /**
    * Extract attempt ID from transaction receipt
    */
-  private extractAttemptIdFromReceipt(receipt: unknown): string | null {
-    if (!receipt || typeof receipt !== 'object') {
+  private extractAttemptIdFromReceipt(receipt: TransactionReceipt): string | null {
+    if (!receipt || !receipt.logs || !Array.isArray(receipt.logs)) {
       return null;
     }
 
-    const logs = (receipt as { logs?: unknown[] }).logs;
-    if (!logs || !Array.isArray(logs)) {
-      return null;
-    }
-
-    if (!this.contract) {
-      return null;
-    }
-
-    // Find AttemptCreated event
-    for (const log of logs) {
+    // Find AttemptCreated event using viem's decodeEventLog
+    for (const log of receipt.logs) {
       try {
-        const parsedLog = this.contract.interface.parseLog({
-          topics: (log as { topics: string[] }).topics,
-          data: (log as { data: string }).data,
+        const decoded = decodeEventLog({
+          abi: ONE_P_ABI,
+          data: log.data,
+          topics: log.topics,
         });
 
-        if (parsedLog && parsedLog.name === 'AttemptCreated') {
-          const attemptId = parsedLog.args.id;
+        if (decoded.eventName === 'AttemptCreated' && decoded.args && 'id' in decoded.args) {
+          const attemptId = decoded.args.id as bigint;
           return attemptId.toString();
         }
       } catch (error) {
@@ -310,27 +333,33 @@ class ContractService {
   async getAttempt(attemptId: string): Promise<AttemptInfo> {
     await this.ensureInitialized();
 
-    if (!this.contract) {
+    if (!this.publicClient || !this.contractAddress) {
       throw new Error('Contract not initialized');
     }
 
     try {
-      const attempt = (await this.contract.getAttempt(attemptId)) as unknown as [
-        bigint,
-        string,
-        string,
-        bigint,
-        bigint,
-        number,
-      ];
+      const attempt = (await readContract(this.publicClient, {
+        address: this.contractAddress,
+        abi: ONE_P_ABI,
+        functionName: 'getAttempt',
+        args: [BigInt(attemptId)],
+      })) as {
+        id: bigint;
+        onePUser: string;
+        hotWallet: string;
+        expiresAt: bigint;
+        difficulty: bigint;
+        status: number;
+      };
+      console.log('[Contract] Attempt info:', attempt);
 
       return {
-        id: attempt[0],
-        onePUser: attempt[1],
-        hotWallet: attempt[2],
-        expiresAt: attempt[3],
-        difficulty: attempt[4],
-        status: Number(attempt[5]),
+        id: attempt.id,
+        onePUser: attempt.onePUser,
+        hotWallet: attempt.hotWallet as Address,
+        expiresAt: attempt.expiresAt,
+        difficulty: attempt.difficulty,
+        status: Number(attempt.status),
       };
     } catch (error) {
       console.error('[Contract] Error getting attempt:', error);
@@ -344,12 +373,17 @@ class ContractService {
   async balanceOf(address: string): Promise<bigint> {
     await this.ensureInitialized();
 
-    if (!this.contract) {
+    if (!this.publicClient || !this.contractAddress) {
       throw new Error('Contract not initialized');
     }
 
     try {
-      const balance = (await this.contract.balanceOf(address)) as unknown as bigint;
+      const balance = (await readContract(this.publicClient, {
+        address: this.contractAddress,
+        abi: ONE_P_ABI,
+        functionName: 'balanceOf',
+        args: [address],
+      })) as bigint;
       return balance;
     } catch (error) {
       console.error('[Contract] Error getting balance:', error);
@@ -363,12 +397,17 @@ class ContractService {
   async getName(): Promise<string> {
     await this.ensureInitialized();
 
-    if (!this.contract) {
+    if (!this.publicClient || !this.contractAddress) {
       throw new Error('Contract not initialized');
     }
 
     try {
-      return (await this.contract.name()) as unknown as string;
+      return (await readContract(this.publicClient, {
+        address: this.contractAddress,
+        abi: ONE_P_ABI,
+        functionName: 'name',
+        args: [],
+      })) as string;
     } catch (error) {
       return '1P';
     }
@@ -380,12 +419,17 @@ class ContractService {
   async getSymbol(): Promise<string> {
     await this.ensureInitialized();
 
-    if (!this.contract) {
+    if (!this.publicClient || !this.contractAddress) {
       throw new Error('Contract not initialized');
     }
 
     try {
-      return (await this.contract.symbol()) as unknown as string;
+      return (await readContract(this.publicClient, {
+        address: this.contractAddress,
+        abi: ONE_P_ABI,
+        functionName: 'symbol',
+        args: [],
+      })) as string;
     } catch (error) {
       return '1P';
     }
@@ -397,12 +441,14 @@ class ContractService {
   async getNativeBalance(address: string): Promise<bigint> {
     await this.ensureInitialized();
 
-    if (!this.provider) {
-      throw new Error('Provider not initialized');
+    if (!this.publicClient) {
+      throw new Error('Public client not initialized');
     }
 
     try {
-      const balance = await this.provider.getBalance(address);
+      const balance = await getBalance(this.publicClient, {
+        address: address as Address,
+      });
       return balance;
     } catch (error) {
       console.error('[Contract] Error getting native balance:', error);
@@ -411,12 +457,188 @@ class ContractService {
   }
 
   /**
-   * Get provider instance
+   * Get public client instance
    */
-  getProvider(): JsonRpcProvider | null {
-    return this.provider;
+  getPublicClient() {
+    return this.publicClient;
+  }
+
+  /**
+   * Send native tCTC tokens from one account to another
+   * @param fromAccount Account to send from
+   * @param toAddress Address to send to
+   * @param amount Amount to send in wei
+   * @returns Transaction hash
+   */
+  async sendNativeToken(fromAccount: Account, toAddress: Address, amount: bigint): Promise<Hash> {
+    await this.ensureInitialized();
+
+    if (!this.publicClient) {
+      throw new Error('Contract not initialized');
+    }
+
+    try {
+      // Create wallet client with the sender account
+      const walletClient = await viemConfigService.createWalletClientWithAccount(fromAccount);
+
+      // Send transaction
+      const hash = await walletClient.sendTransaction({
+        account: fromAccount,
+        to: toAddress,
+        value: amount,
+      });
+
+      console.log('[Contract] Native token transfer sent:', hash);
+
+      // Wait for confirmation
+      const receipt = await waitForTransactionReceipt(this.publicClient, {
+        hash,
+      });
+
+      if (!receipt || receipt.status !== 'success') {
+        throw new Error('Native token transfer failed');
+      }
+
+      console.log('[Contract] Native token transfer confirmed in block:', receipt.blockNumber);
+
+      return hash;
+    } catch (error) {
+      console.error('[Contract] Native token transfer error:', error);
+      throw new Error(error instanceof Error ? error.message : 'Native token transfer failed');
+    }
+  }
+
+  /**
+   * Transfer 1P tokens from one account to another
+   * @param fromAccount Account to send from
+   * @param toAddress Address to send to
+   * @param amount Amount to send in wei
+   * @returns Transaction hash
+   */
+  async transferTokens(fromAccount: Account, toAddress: Address, amount: bigint): Promise<Hash> {
+    await this.ensureInitialized();
+
+    if (!this.contractAddress || !this.publicClient) {
+      throw new Error('Contract not initialized');
+    }
+
+    try {
+      // Create wallet client with the sender account
+      const walletClient = await viemConfigService.createWalletClientWithAccount(fromAccount);
+
+      // Check if contract is paused
+      const isPaused = (await readContract(this.publicClient, {
+        address: this.contractAddress,
+        abi: ONE_P_ABI,
+        functionName: 'paused',
+      })) as boolean;
+
+      console.log('[Contract] Token contract paused status:', isPaused);
+
+      if (isPaused) {
+        // Check if the sender is the owner
+        const owner = (await readContract(this.publicClient, {
+          address: this.contractAddress,
+          abi: ONE_P_ABI,
+          functionName: 'owner',
+        })) as Address;
+
+        console.log('[Contract] Contract owner:', owner);
+        console.log('[Contract] Sender account:', fromAccount.address);
+
+        if (owner.toLowerCase() === fromAccount.address.toLowerCase()) {
+          console.log('[Contract] Sender is owner, using mint function');
+          // Use mint if sender is owner
+          const hash = await writeContract(walletClient, {
+            address: this.contractAddress,
+            abi: ONE_P_ABI,
+            functionName: 'mint',
+            args: [toAddress, amount],
+            account: fromAccount,
+            gas: 150000n,
+          });
+
+          console.log('[Contract] Token mint sent:', hash);
+
+          // Wait for confirmation
+          const receipt = await waitForTransactionReceipt(this.publicClient, {
+            hash,
+          });
+
+          console.log('[Contract] Token mint receipt:', {
+            status: receipt.status,
+            blockNumber: receipt.blockNumber,
+            gasUsed: receipt.gasUsed,
+          });
+
+          if (!receipt || receipt.status !== 'success') {
+            throw new Error(
+              `Token mint failed - Status: ${receipt?.status}, Block: ${receipt?.blockNumber}`
+            );
+          }
+
+          console.log('[Contract] Token mint confirmed in block:', receipt.blockNumber);
+          return hash;
+        } else {
+          throw new Error(
+            `Contract is paused and sender (${fromAccount.address}) is not the owner (${owner}). ` +
+              `Cannot transfer tokens. Please unpause the contract or use the owner account.`
+          );
+        }
+      }
+
+      // Contract is not paused, use normal transfer
+      // First check if sender has enough balance
+      const senderBalance = await this.balanceOf(fromAccount.address);
+      console.log('[Contract] Sender balance:', senderBalance.toString(), 'wei');
+      console.log('[Contract] Amount to transfer:', amount.toString(), 'wei');
+
+      if (senderBalance < amount) {
+        throw new Error(
+          `Insufficient token balance. Has: ${senderBalance.toString()}, Needs: ${amount.toString()}`
+        );
+      }
+
+      const hash = await writeContract(walletClient, {
+        address: this.contractAddress,
+        abi: ONE_P_ABI,
+        functionName: 'transfer',
+        args: [toAddress, amount],
+        account: fromAccount,
+      });
+
+      console.log('[Contract] Token transfer sent:', hash);
+
+      // Wait for confirmation
+      const receipt = await waitForTransactionReceipt(this.publicClient, {
+        hash,
+      });
+
+      console.log('[Contract] Token transfer receipt:', {
+        status: receipt.status,
+        blockNumber: receipt.blockNumber,
+        gasUsed: receipt.gasUsed,
+      });
+
+      if (!receipt || receipt.status !== 'success') {
+        throw new Error(
+          `Token transfer failed - Status: ${receipt?.status}, Block: ${receipt?.blockNumber}`
+        );
+      }
+
+      console.log('[Contract] Token transfer confirmed in block:', receipt.blockNumber);
+
+      return hash;
+    } catch (error) {
+      console.error('[Contract] Token transfer error:', error);
+
+      // Log detailed error information
+      if (error && typeof error === 'object') {
+        console.error('[Contract] Error details:', error);
+      }
+
+      throw new Error(error instanceof Error ? error.message : 'Token transfer failed');
+    }
   }
 }
-
 export const contractService = new ContractService();
-

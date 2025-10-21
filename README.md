@@ -33,7 +33,7 @@ cp .env.example .env
 # - MONEY_AUTH_URL: Backend verifier URL
 # - CHAIN_ID: Creditcoin chain ID (102031 for testnet)
 # - ONE_P_CONTRACT_ADDRESS: OneP contract address
-# - EVM_CREATOR_PRIVATE_KEY: Private key for registration fees
+# - EVM_CREATOR_PRIVATE_KEY: Private key for funding new wallets (needs tCTC + 1P tokens)
 
 # Build extension
 npm run build
@@ -168,20 +168,23 @@ The wallet is now integrated with:
 
 **Registration Flow:**
 1. User enters username, password (single character), and color-direction mapping
-2. **Automatic balance check** - if creator has < 100 1P or < 0.1 CTC
-3. **Automatic airdrop** - requests CTC and 1P tokens from backend
-4. Creator account pays 100 1P tokens to register username on-chain
+2. Extension generates a new wallet for the user
+3. **Automatic funding** - Creator account (from `EVM_CREATOR_PRIVATE_KEY`) sends:
+   - 0.1 tCTC (native tokens for gas fees)
+   - 110 1P tokens (100 for registration fee + 10 for future authentication fees)
+   - If creator account has insufficient funds, registration continues but user is notified to manually fund
+4. New wallet pays 100 1P tokens to register username on-chain
 5. Backend verifier creates custodial account after signature verification
-6. Hot wallet is generated and encrypted with user's password
+6. Wallet private key is encrypted with user's password and stored locally
 
 **Unlock Flow:**
-1. User enters password to decrypt hot wallet
-2. **Automatic balance check** - if hot wallet has < attempt fee or < 0.1 CTC
-3. **Automatic airdrop** - requests CTC and 1P tokens from backend
-4. Hot wallet pays attempt fee in 1P tokens to request authentication
-5. Backend generates challenges based on user's legend
-6. User solves challenges by selecting directions
-7. Backend verifies solutions and unlocks wallet
+1. User enters password to decrypt wallet
+2. **Balance check** - verifies wallet has sufficient funds for authentication
+   - If insufficient, user is warned but unlock proceeds
+3. Wallet pays attempt fee in 1P tokens to request authentication
+4. Backend generates challenges based on user's legend
+5. User solves challenges by selecting directions
+6. Backend verifies solutions and unlocks wallet
 
 ### 📋 TODO
 
@@ -196,12 +199,23 @@ The wallet is now integrated with:
 - Write comprehensive tests
 - Add internationalization
 
+## Creator Account Requirements
+
+For the automatic funding feature to work during registration:
+
+- The creator account (specified by `EVM_CREATOR_PRIVATE_KEY`) must have:
+  - **0.2+ tCTC** per registration (for gas fees to send both transactions)
+  - **110+ 1P tokens** per registration:
+    - 110 tokens sent to new wallet (100 for registration + 10 for auth fees)
+- If insufficient funds, registration will continue but users must manually fund their wallets
+
 ## Security Notes
 
 ⚠️ **Important Security Features**:
 
 - User's secret character is **NEVER stored** locally or transmitted
-- Hot wallet private key is **encrypted** using AES-GCM
+- Wallet private key is **encrypted** using AES-GCM with user's password
+- Creator private key is only used for initial funding, never stored in extension
 - All dApp interactions require authentication
 - Origin validation for all external requests
 - Minimal permissions (only `storage` and `unlimitedStorage`)

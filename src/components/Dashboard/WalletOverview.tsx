@@ -4,9 +4,9 @@ import { PixelCopy } from '@/components/ui/pixel-icons';
 import { EthereumLogo, OnePProtocolLogo } from '@/components/ui/token-logos';
 import { NETWORKS } from '@/constants/protocol';
 import { contractService } from '@/services/contract';
-import { formatEther } from 'ethers';
 import { Check, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { formatEther } from 'viem';
 
 interface WalletOverviewProps {
   username: string;
@@ -28,14 +28,9 @@ export const WalletOverview = ({ username, address, currentNetwork }: WalletOver
         const tokenBal = await contractService.balanceOf(address);
         setTokenBalance(formatEther(tokenBal));
 
-        // Get ETH/CTC balance from provider
-        const provider = contractService.getProvider();
-        if (provider) {
-          const ethBal = await provider.getBalance(address);
-          setEthBalance(formatEther(ethBal));
-        } else {
-          setEthBalance('0');
-        }
+        // Get ETH/CTC balance from contract service
+        const ethBal = await contractService.getNativeBalance(address);
+        setEthBalance(formatEther(ethBal));
       } catch (error) {
         console.error('Failed to load balances:', error);
         setEthBalance('0');

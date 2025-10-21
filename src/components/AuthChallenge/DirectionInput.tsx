@@ -5,7 +5,6 @@ import {
   PixelArrowRight,
   PixelArrowUp,
 } from '@/components/ui/pixel-icons';
-import { DIRECTION_TO_COLOR } from '@/constants/protocol';
 import { cn } from '@/lib/utils';
 import { Direction } from '@/types/protocol';
 import { SkipForward } from 'lucide-react';
@@ -60,16 +59,12 @@ export const DirectionInput = ({ onDirection, disabled = false }: DirectionInput
           onClick={() => onDirection('UP')}
           disabled={disabled}
           size="sm"
+          variant="default"
           className={cn(
             'h-16 font-pixel transition-all duration-200 hover:scale-110 active:scale-95',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
-          style={{
-            backgroundColor: disabled ? undefined : DIRECTION_TO_COLOR.UP,
-            color: disabled ? undefined : '#FFFFFF',
-            borderColor: disabled ? undefined : DIRECTION_TO_COLOR.UP,
-          }}
-          aria-label="Up (Red)"
+          aria-label="Up"
         >
           <div className="flex flex-col items-center gap-0.5">
             <PixelArrowUp className="h-5 w-5" />
@@ -85,16 +80,12 @@ export const DirectionInput = ({ onDirection, disabled = false }: DirectionInput
           onClick={() => onDirection('LEFT')}
           disabled={disabled}
           size="sm"
+          variant="default"
           className={cn(
             'h-16 font-pixel transition-all duration-200 hover:scale-110 active:scale-95',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
-          style={{
-            backgroundColor: disabled ? undefined : DIRECTION_TO_COLOR.LEFT,
-            color: disabled ? undefined : '#FFFFFF',
-            borderColor: disabled ? undefined : DIRECTION_TO_COLOR.LEFT,
-          }}
-          aria-label="Left (Blue)"
+          aria-label="Left"
         >
           <div className="flex flex-col items-center gap-0.5">
             <PixelArrowLeft className="h-5 w-5" />
@@ -125,16 +116,12 @@ export const DirectionInput = ({ onDirection, disabled = false }: DirectionInput
           onClick={() => onDirection('RIGHT')}
           disabled={disabled}
           size="sm"
+          variant="default"
           className={cn(
             'h-16 font-pixel transition-all duration-200 hover:scale-110 active:scale-95',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
-          style={{
-            backgroundColor: disabled ? undefined : DIRECTION_TO_COLOR.RIGHT,
-            color: disabled ? undefined : '#000000',
-            borderColor: disabled ? undefined : DIRECTION_TO_COLOR.RIGHT,
-          }}
-          aria-label="Right (Yellow)"
+          aria-label="Right"
         >
           <div className="flex flex-col items-center gap-0.5">
             <PixelArrowRight className="h-5 w-5" />
@@ -150,16 +137,12 @@ export const DirectionInput = ({ onDirection, disabled = false }: DirectionInput
           onClick={() => onDirection('DOWN')}
           disabled={disabled}
           size="sm"
+          variant="default"
           className={cn(
             'h-16 font-pixel transition-all duration-200 hover:scale-110 active:scale-95',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
-          style={{
-            backgroundColor: disabled ? undefined : DIRECTION_TO_COLOR.DOWN,
-            color: disabled ? undefined : '#FFFFFF',
-            borderColor: disabled ? undefined : DIRECTION_TO_COLOR.DOWN,
-          }}
-          aria-label="Down (Green)"
+          aria-label="Down"
         >
           <div className="flex flex-col items-center gap-0.5">
             <PixelArrowDown className="h-5 w-5" />

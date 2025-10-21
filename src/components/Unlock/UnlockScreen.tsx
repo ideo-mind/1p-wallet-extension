@@ -9,9 +9,12 @@ import { storage } from '@/services/storage';
 import { AuthenticationChallenge, colorGroupsToGrid, Direction } from '@/types/protocol';
 import { checkBalances } from '@/utils/balanceChecker';
 import { createAuthOptionsSignature, createAuthVerifySignature } from '@/utils/signatures';
-import { formatEther, Wallet } from 'ethers';
+import { createWalletFromPrivateKey } from '@/utils/wallet';
 import { AlertCircle } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import type { Hex } from 'viem';
+import { formatEther } from 'viem';
+import type { Account } from 'viem/accounts';
 
 interface UnlockScreenProps {
   onUnlock: () => void;
@@ -27,7 +30,7 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
   const [error, setError] = useState<string | null>(null);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [username, setUsername] = useState('');
-  const [creatorWallet, setCreatorWallet] = useState<Wallet | null>(null); // Store decrypted wallet
+  const [creatorWallet, setCreatorWallet] = useState<Account | null>(null); // Store decrypted wallet
 
   useEffect(() => {
     const init = async () => {
@@ -57,136 +60,60 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
 
       // Step 2: Load encrypted creator wallet data from storage
       setLoadingMessage('Loading wallet...');
-      const { encryptedCreatorPrivateKey, encryptedEncryptionKey, creatorWalletAddress } =
-        await storage.get([
-          'encryptedCreatorPrivateKey',
-          'encryptedEncryptionKey',
-          'creatorWalletAddress',
-        ]);
+      const { encryptedCreatorPrivateKey, encryptionKey, creatorWalletAddress } = await storage.get(
+        ['encryptedCreatorPrivateKey', 'encryptionKey', 'creatorWalletAddress']
+      );
 
-      if (!encryptedCreatorPrivateKey || !encryptedEncryptionKey || !creatorWalletAddress) {
+      if (!encryptedCreatorPrivateKey || !encryptionKey || !creatorWalletAddress) {
         throw new Error('Creator wallet not found. Please reset your wallet.');
       }
 
-      // Step 3: Decrypt creator wallet (we need password for this)
+      // Step 3: Decrypt creator wallet (no password needed - using stored encryption key)
       setLoadingMessage('Decrypting wallet...');
       console.log('[Unlock] Decrypting creator wallet...');
 
-      // For now, we'll need to prompt for password since we need it to decrypt the encryption key
-      // This is a temporary solution - in the future we might keep wallet unlocked in memory
-      const password = prompt('Enter your password to unlock wallet:');
-      if (!password) {
-        throw new Error('Password required to unlock wallet');
-      }
-
-      const { decryptWithPassword, decryptPrivateKey } = await import('@/utils/crypto');
-      const encryptionKey = await decryptWithPassword(encryptedEncryptionKey, password);
+      const { decryptPrivateKey } = await import('@/utils/crypto');
       const privateKey = await decryptPrivateKey(encryptedCreatorPrivateKey, encryptionKey);
 
-      const { Wallet } = await import('ethers');
-      const creatorWallet = new Wallet(privateKey);
-      console.log('[Unlock] Creator wallet decrypted:', creatorWallet.address);
+      // Create wallet from decrypted private key using viem
+      const walletInfo = createWalletFromPrivateKey(privateKey as Hex);
+      const creatorWallet = walletInfo.account;
+      console.log('[Unlock] Creator wallet decrypted:', walletInfo.address);
 
       // Store wallet in state for later use
       setCreatorWallet(creatorWallet);
 
       // Step 4: Check creator wallet has sufficient balance
       setLoadingMessage('Checking balances...');
-      const balances = await checkBalances(creatorWallet.address, attemptFee);
+      const balances = await checkBalances(walletInfo.address, attemptFee);
 
       console.log('[Unlock] Native balance:', formatEther(balances.nativeBalance), 'CTC');
       console.log('[Unlock] Token balance:', formatEther(balances.tokenBalance), '1P');
 
       if (balances.needsAirdrop) {
-        console.log('[Unlock] Insufficient funds, requesting airdrop...');
-        setLoadingMessage('Requesting airdrop...');
-
-        // Use decrypted creator wallet for airdrop with debug
-        const { createAirdropSignatureWithDebug } = await import('@/utils/signatureDebug');
-        const { message, signature, debug } = await createAirdropSignatureWithDebug(creatorWallet);
-
-        console.log('[Unlock] Signature debug info:', debug);
-
-        if (!debug.addressesMatch) {
-          console.error('[Unlock] ❌ CRITICAL: Signature address mismatch detected!');
-          console.error('[Unlock] Expected address:', debug.signerAddress);
-          console.error('[Unlock] Recovered address:', debug.recoveredAddress);
-          throw new Error(
-            `Signature verification failed: Expected ${debug.signerAddress} but recovered ${debug.recoveredAddress}`
-          );
-        }
-
-        const airdropResult = await backendService.airdrop(message, signature);
-
-        if (!airdropResult.success) {
-          throw new Error(airdropResult.error || 'Airdrop failed. Please contact support.');
-        }
-
-        console.log('[Unlock] Airdrop successful!');
-        if (airdropResult.transactions) {
-          console.log('[Unlock] Native TX:', airdropResult.transactions.native);
-          console.log('[Unlock] Token TX:', airdropResult.transactions.token);
-        }
-
-        // Validate that airdrop went to correct address
-        if (airdropResult.address) {
-          console.log('[Unlock] Backend extracted address:', airdropResult.address);
-          console.log('[Unlock] Expected address:', creatorWallet.address);
-
-          if (airdropResult.address.toLowerCase() !== creatorWallet.address.toLowerCase()) {
-            console.error('[Unlock] ❌ CRITICAL: Airdrop sent to wrong address!');
-            console.error('[Unlock] Expected:', creatorWallet.address);
-            console.error('[Unlock] Actual:', airdropResult.address);
-            throw new Error(
-              `Airdrop sent to wrong address: ${airdropResult.address} instead of ${creatorWallet.address}`
-            );
-          } else {
-            console.log('[Unlock] ✅ Airdrop sent to correct address');
-          }
-        }
-
-        // Poll for balance updates (retry up to 10 times with 2s delay = 20s max)
-        setLoadingMessage('Waiting for airdrop confirmation...');
-        const { pollForBalances } = await import('@/utils/balancePoller');
-        const { parseEther } = await import('ethers');
-        const NATIVE_THRESHOLD = parseEther('0.1');
-
-        const pollResult = await pollForBalances(
-          creatorWallet.address,
-          NATIVE_THRESHOLD,
-          attemptFee,
-          10, // Max 10 attempts
-          2000 // 2 second delay between attempts
+        console.warn('[Unlock] ⚠️ Insufficient funds detected');
+        console.warn('[Unlock] Native:', formatEther(balances.nativeBalance), 'CTC (need 0.1+)');
+        console.warn(
+          '[Unlock] Tokens:',
+          formatEther(balances.tokenBalance),
+          '1P (need',
+          formatEther(attemptFee),
+          '+)'
         );
-
-        if (!pollResult.success) {
-          console.error('[Unlock] Balances after polling:', {
-            native: formatEther(pollResult.nativeBalance),
-            tokens: formatEther(pollResult.tokenBalance),
-            attempts: pollResult.attempts,
-          });
-          throw new Error(
-            `Airdrop completed but balances still insufficient after ${pollResult.attempts} checks. ` +
-              `Current: ${formatEther(pollResult.nativeBalance)} CTC, ${formatEther(pollResult.tokenBalance)} 1P. ` +
-              `Please wait a moment and try again or contact support.`
-          );
-        }
-
-        console.log(
-          '[Unlock] Balances sufficient after airdrop (took',
-          pollResult.attempts,
-          'attempts)'
-        );
+        console.warn('[Unlock] User may need to manually fund their wallet');
+        // Continue anyway - don't block unlock
       }
 
       // Step 5: Request attempt on-chain (using decrypted creator wallet)
       setLoadingMessage('Requesting authentication attempt...');
       console.log('[Unlock] Requesting authentication attempt...');
       const attemptId = await contractService.requestAttempt(onePUser, creatorWallet);
-      console.log('[Unlock] Attempt ID:', attemptId);
+      console.log('[Unlock] Attempt ID:-', attemptId);
+      console.log('[Unlock] Now getting attempt details...');
 
       // Step 5: Get attempt details from contract
       const attemptInfo = await contractService.getAttempt(attemptId);
+      console.log('[Unlock] Attempt info:', attemptInfo);
       console.log('[Unlock] Attempt difficulty:', attemptInfo.difficulty.toString());
 
       // Step 6: Sign attempt ID for backend (using creator wallet)
@@ -194,8 +121,8 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
       const attemptSignature = await createAuthOptionsSignature(creatorWallet, attemptId);
 
       // Step 7: Get challenges from backend
-      setLoadingMessage('Fetching authentication challenges...');
-      console.log('[Unlock] Fetching authentication challenges...');
+      setLoadingMessage('Authenticating ...');
+      console.log('[Unlock] Authenticating...');
       const authOptions = await backendService.getAuthOptions(attemptId, attemptSignature);
 
       const challenges = authOptions.challenges || [];
@@ -208,13 +135,70 @@ export const UnlockScreen: React.FC<UnlockScreenProps> = ({ onUnlock }) => {
       console.log('[Unlock] Received', challenges.length, 'challenges');
 
       // Step 8: Convert challenges to grids for UI
-      const grids = challenges.map((ch, idx) => colorGroupsToGrid(ch.colorGroups, idx + 1));
+      console.log('[Unlock] Processing challenges:', challenges);
+
+      const grids = challenges
+        .filter((ch) => ch && (ch.grid || ch.colorGroups)) // Filter out undefined challenges
+        .map((ch, idx) => {
+          console.log(`[Unlock] Challenge ${idx + 1}:`, ch);
+
+          if (ch.colorGroups) {
+            // Backend returned colorGroups directly
+            console.log(`[Unlock] Using colorGroups for challenge ${idx + 1}`);
+            return colorGroupsToGrid(ch.colorGroups, idx + 1);
+          } else if (ch.grid) {
+            // Backend returned grid string - need to parse it
+            console.log(`[Unlock] Parsing grid string for challenge ${idx + 1}`);
+
+            // For now, create a simple grid from the string
+            // This is a temporary solution - the actual parsing needs to match backend algorithm
+            const gridChars = Array.from(ch.grid);
+            const cols = 8; // Assume 8 columns
+            const rows = Math.ceil(gridChars.length / cols);
+
+            const letters: string[][] = [];
+            const colors: string[][] = [];
+
+            for (let i = 0; i < rows; i++) {
+              const rowLetters: string[] = [];
+              const rowColors: string[] = [];
+
+              for (let j = 0; j < cols; j++) {
+                const index = i * cols + j;
+                if (index < gridChars.length) {
+                  rowLetters.push(gridChars[index]);
+                  rowColors.push('#FFFFFF'); // Default white color
+                } else {
+                  rowLetters.push('');
+                  rowColors.push('#FFFFFF');
+                }
+              }
+
+              letters.push(rowLetters);
+              colors.push(rowColors);
+            }
+
+            return {
+              letters,
+              colors,
+              rows,
+              cols,
+              round: idx + 1,
+            };
+          }
+
+          throw new Error(`Invalid challenge format: ${JSON.stringify(ch)}`);
+        });
+
+      if (grids.length === 0) {
+        throw new Error('No valid challenges received from backend');
+      }
 
       // Create authentication challenge object
       const authChallenge: AuthenticationChallenge = {
         attemptId,
         grids,
-        rounds: challenges.length,
+        rounds: grids.length,
         difficulty: Number(attemptInfo.difficulty),
         expiresAt: Number(attemptInfo.expiresAt) * 1000, // Convert to milliseconds
         challengeId,

@@ -12,7 +12,8 @@ export interface ColorGroups {
 }
 
 export interface Challenge {
-  colorGroups: ColorGroups;
+  grid?: string; // Backend sends grid as string
+  colorGroups?: ColorGroups; // Alternative format
 }
 
 export interface RegisterOptionsResponse {

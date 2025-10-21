@@ -2,7 +2,7 @@
 // Helps debug backend signature verification issues
 
 import { backendService } from '@/services/backend';
-import { Wallet } from 'ethers';
+import { type Account, type Address, type Hex } from 'viem';
 
 /**
  * Debug backend signature verification
@@ -10,11 +10,11 @@ import { Wallet } from 'ethers';
  */
 export async function debugBackendSignatureVerification(
   message: string,
-  signature: string,
-  expectedAddress: string
+  signature: Hex,
+  expectedAddress: Address
 ): Promise<{
   success: boolean;
-  backendAddress?: string;
+  backendAddress?: Address;
   error?: string;
   debugInfo: any;
 }> {
@@ -49,7 +49,8 @@ export async function debugBackendSignatureVerification(
 
     return {
       success: result.success,
-      backendAddress,
+      backendAddress:
+        backendAddress && backendAddress !== 'Unknown' ? (backendAddress as Address) : undefined,
       error: result.error,
       debugInfo: {
         expectedAddress,
@@ -79,7 +80,7 @@ export async function debugBackendSignatureVerification(
  * Comprehensive airdrop debug flow
  * Tests the complete signature creation and backend verification flow
  */
-export async function debugCompleteAirdropFlow(wallet: Wallet): Promise<{
+export async function debugCompleteAirdropFlow(account: Account): Promise<{
   frontendDebug: any;
   backendDebug: any;
   issueIdentified: boolean;
@@ -92,27 +93,27 @@ export async function debugCompleteAirdropFlow(wallet: Wallet): Promise<{
 
   // Step 1: Test frontend signature creation
   const { createAirdropSignatureWithDebug } = await import('@/utils/signatureDebug');
-  const { message, signature, debug: frontendDebug } = await createAirdropSignatureWithDebug(wallet);
+  const {
+    message,
+    signature,
+    debug: frontendDebug,
+  } = await createAirdropSignatureWithDebug(account);
 
   if (!frontendDebug.addressesMatch) {
     issueIdentified = true;
     recommendations.push('Frontend signature creation issue: Addresses do not match');
-    recommendations.push('Check wallet.signMessage() implementation');
+    recommendations.push('Check viem signMessage() implementation');
   }
 
   // Step 2: Test backend signature verification
-  const backendDebug = await debugBackendSignatureVerification(
-    message,
-    signature,
-    wallet.address
-  );
+  const backendDebug = await debugBackendSignatureVerification(message, signature, account.address);
 
   if (!backendDebug.success) {
     issueIdentified = true;
     recommendations.push('Backend verification failed: ' + backendDebug.error);
   }
 
-  if (backendDebug.backendAddress && backendDebug.backendAddress !== wallet.address) {
+  if (backendDebug.backendAddress && backendDebug.backendAddress !== account.address) {
     issueIdentified = true;
     recommendations.push('Backend extracted wrong address from signature');
     recommendations.push('Check backend signature verification middleware');

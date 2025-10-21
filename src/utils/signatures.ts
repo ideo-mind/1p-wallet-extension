@@ -1,31 +1,47 @@
 // Signature Utilities for 1P Protocol
 // Handles signing of payloads and messages for backend authentication
 
-import { Wallet } from 'ethers';
+import { viemConfigService } from '@/services/viemConfig';
+import { verifyMessage, type Account, type Address, type Hex } from 'viem';
+import { signMessage as viemSignMessage } from 'viem/actions';
 
 /**
- * Sign a JSON payload with provided wallet
+ * Sign a JSON payload with provided account
  * Used for registration and verification requests
  */
 export async function signPayload(
-  wallet: Wallet,
+  account: Account,
   payload: Record<string, unknown>
-): Promise<string> {
+): Promise<Hex> {
   // Convert payload to JSON string with no spaces (must match backend format)
   const payloadString = JSON.stringify(payload);
 
-  // Sign the JSON string
-  const signature = await wallet.signMessage(payloadString);
+  // Create wallet client with the account
+  const walletClient = await viemConfigService.createWalletClientWithAccount(account.address);
+
+  // Sign the JSON string using viem
+  const signature = await viemSignMessage(walletClient, {
+    account,
+    message: payloadString,
+  });
 
   return signature;
 }
 
 /**
- * Sign a simple string message with provided wallet
+ * Sign a simple string message with provided account
  * Used for attempt ID and challenge ID signatures
  */
-export async function signMessage(wallet: Wallet, message: string): Promise<string> {
-  const signature = await wallet.signMessage(message);
+export async function signMessage(account: Account, message: string): Promise<Hex> {
+  // Create wallet client with the account
+  const walletClient = await viemConfigService.createWalletClientWithAccount(account.address);
+
+  // Sign the message using viem
+  const signature = await viemSignMessage(walletClient, {
+    account,
+    message,
+  });
+
   return signature;
 }
 
@@ -34,13 +50,13 @@ export async function signMessage(wallet: Wallet, message: string): Promise<stri
  * Signs the registration payload with color-direction legend
  */
 export async function createRegistrationSignature(
-  wallet: Wallet,
+  account: Account,
   registrationData: {
     onePUser: string;
     password: string;
     legend: Record<string, string>;
   }
-): Promise<{ payload: Record<string, unknown>; signature: string }> {
+): Promise<{ payload: Record<string, unknown>; signature: Hex }> {
   const currentTime = Math.floor(Date.now() / 1000);
 
   const payload = {
@@ -48,11 +64,11 @@ export async function createRegistrationSignature(
     '1p': registrationData.password,
     legend: registrationData.legend,
     iat: currentTime,
-    iss: wallet.address,
+    iss: account.address,
     exp: currentTime + 3600, // 1 hour expiry
   };
 
-  const signature = await signPayload(wallet, payload);
+  const signature = await signPayload(account, payload);
 
   return { payload, signature };
 }
@@ -62,10 +78,10 @@ export async function createRegistrationSignature(
  * Signs the attempt ID to get challenges from backend
  */
 export async function createAuthOptionsSignature(
-  wallet: Wallet,
+  account: Account,
   attemptId: string
-): Promise<string> {
-  return signMessage(wallet, attemptId);
+): Promise<Hex> {
+  return signMessage(account, attemptId);
 }
 
 /**
@@ -73,12 +89,12 @@ export async function createAuthOptionsSignature(
  * Signs the challenge ID to submit solutions
  */
 export async function createAuthVerifySignature(
-  wallet: Wallet,
+  account: Account,
   challengeId: string,
   solutions: string[]
-): Promise<{ payload: Record<string, unknown>; signature: string }> {
+): Promise<{ payload: Record<string, unknown>; signature: Hex }> {
   // Sign the challenge ID directly (as per backend middleware)
-  const signature = await signMessage(wallet, challengeId);
+  const signature = await signMessage(account, challengeId);
 
   const payload = {
     challenge_id: challengeId,
@@ -91,17 +107,39 @@ export async function createAuthVerifySignature(
 /**
  * Create airdrop signature
  * Signs a timestamped message to request airdrop from backend
- * Uses backend-compatible signature method
+ * Uses viem signature method for backend compatibility
  */
 export async function createAirdropSignature(
-  wallet: Wallet
-): Promise<{ message: string; signature: string }> {
+  account: Account
+): Promise<{ message: string; signature: Hex }> {
   // Create timestamped message (matches Python: f"airdrop_{int(time.time())}")
   const messageText = `airdrop_${Math.floor(Date.now() / 1000)}`;
 
-  // Use backend-compatible signature method
-  const { createBackendCompatibleSignature } = await import('./signatureBackendTest');
-  return createBackendCompatibleSignature(wallet, messageText);
+  // Sign the message using viem
+  const signature = await signMessage(account, messageText);
+
+  return { message: messageText, signature };
+}
+
+/**
+ * Verify a signature using viem
+ * Replaces ethers verifyMessage
+ */
+export async function verifySignature(
+  message: string,
+  signature: Hex,
+  address: Address
+): Promise<boolean> {
+  try {
+    return await verifyMessage({
+      message,
+      signature,
+      address,
+    });
+  } catch (error) {
+    console.error('[Signatures] Signature verification failed:', error);
+    return false;
+  }
 }
 
 /**

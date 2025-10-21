@@ -1,49 +1,54 @@
 // Signature Debug Utilities
 // Helps debug signature address extraction issues
 
-import { Wallet, verifyMessage } from 'ethers';
+import { verifyMessage, type Account, type Address, type Hex } from 'viem';
+import { signMessage } from './signatures';
 
 /**
  * Debug function to verify signature address extraction
  * This helps identify if the issue is in signature creation or extraction
  */
 export async function debugSignatureAddressExtraction(
-  wallet: Wallet,
+  account: Account,
   message: string
 ): Promise<{
-  signerAddress: string;
-  recoveredAddress: string;
+  signerAddress: Address;
+  recoveredAddress: Address;
   addressesMatch: boolean;
-  signature: string;
+  signature: Hex;
   message: string;
 }> {
   console.log('[Signature Debug] Starting signature address extraction debug...');
-  console.log('[Signature Debug] Original wallet address:', wallet.address);
+  console.log('[Signature Debug] Original wallet address:', account.address);
   console.log('[Signature Debug] Message to sign:', message);
 
-  // Create signature
-  const signature = await wallet.signMessage(message);
+  // Create signature using viem
+  const signature = await signMessage(account, message);
   console.log('[Signature Debug] Signature created:', signature);
 
-  // Recover address from signature
-  const recoveredAddress = verifyMessage(message, signature);
-  console.log('[Signature Debug] Recovered address:', recoveredAddress);
+  // Verify signature using viem
+  const isValid = await verifyMessage({
+    message,
+    signature,
+    address: account.address,
+  });
+  console.log('[Signature Debug] Signature valid:', isValid);
 
-  const addressesMatch = wallet.address.toLowerCase() === recoveredAddress.toLowerCase();
+  const addressesMatch = isValid;
   console.log('[Signature Debug] Addresses match:', addressesMatch);
 
   if (!addressesMatch) {
     console.error('[Signature Debug] ❌ MISMATCH DETECTED!');
-    console.error('[Signature Debug] Expected:', wallet.address);
-    console.error('[Signature Debug] Recovered:', recoveredAddress);
+    console.error('[Signature Debug] Expected:', account.address);
+    console.error('[Signature Debug] Signature verification failed');
     console.error('[Signature Debug] This indicates a signature creation or verification issue');
   } else {
     console.log('[Signature Debug] ✅ Addresses match correctly');
   }
 
   return {
-    signerAddress: wallet.address,
-    recoveredAddress,
+    signerAddress: account.address,
+    recoveredAddress: account.address, // For compatibility, return the account address
     addressesMatch,
     signature,
     message,
@@ -54,30 +59,24 @@ export async function debugSignatureAddressExtraction(
  * Enhanced airdrop signature creation with debugging
  */
 export async function createAirdropSignatureWithDebug(
-  wallet: Wallet
-): Promise<{ message: string; signature: string; debug: any }> {
+  account: Account
+): Promise<{ message: string; signature: Hex; debug: any }> {
   const messageText = `airdrop_${Math.floor(Date.now() / 1000)}`;
 
-  console.log('[Airdrop Debug] Creating airdrop signature with backend compatibility...');
+  console.log('[Airdrop Debug] Creating airdrop signature with viem...');
 
-  // Test different signature methods to find backend-compatible one
-  const { testBackendSignatureCompatibility } = await import('./signatureBackendTest');
-  const compatibilityResults = await testBackendSignatureCompatibility(wallet, messageText);
+  // Use viem signature creation
+  const signature = await signMessage(account, messageText);
 
-  // Use the first method for now (we'll refine based on backend testing)
-  const { createBackendCompatibleSignature } = await import('./signatureBackendTest');
-  const { signature } = await createBackendCompatibleSignature(wallet, messageText);
-
-  // Also run our standard debug
-  const debug = await debugSignatureAddressExtraction(wallet, messageText);
+  // Run our standard debug
+  const debug = await debugSignatureAddressExtraction(account, messageText);
 
   return {
     message: messageText,
     signature,
     debug: {
       ...debug,
-      compatibilityResults,
-      backendCompatible: true
+      viemCompatible: true,
     },
   };
 }
@@ -85,20 +84,22 @@ export async function createAirdropSignatureWithDebug(
 /**
  * Verify signature matches expected address
  */
-export function verifySignatureMatchesAddress(
+export async function verifySignatureMatchesAddress(
   message: string,
-  signature: string,
-  expectedAddress: string
-): boolean {
+  signature: Hex,
+  expectedAddress: Address
+): Promise<boolean> {
   try {
-    const recoveredAddress = verifyMessage(message, signature);
-    const matches = recoveredAddress.toLowerCase() === expectedAddress.toLowerCase();
+    const isValid = await verifyMessage({
+      message,
+      signature,
+      address: expectedAddress,
+    });
 
     console.log('[Signature Verify] Expected:', expectedAddress);
-    console.log('[Signature Verify] Recovered:', recoveredAddress);
-    console.log('[Signature Verify] Matches:', matches);
+    console.log('[Signature Verify] Signature valid:', isValid);
 
-    return matches;
+    return isValid;
   } catch (error) {
     console.error('[Signature Verify] Error verifying signature:', error);
     return false;
